@@ -838,6 +838,8 @@ tabBar.addEventListener('click', (e) => {
 });
 
 // --- Battle Invite Handler ---
+// --- Replace the old checkForBattleInvite function with this one ---
+
 async function checkForBattleInvite() {
     const params = new URLSearchParams(window.location.search);
     const battleId = params.get('battle');
@@ -850,11 +852,42 @@ async function checkForBattleInvite() {
             return;
         }
 
-        // Add the user to the participants table
-        await db.from('session_participants').insert({ session_id: battleId, player_id: user.id });
+        // ---- NEW CODE START ----
+        // Check if this user is ALREADY a participant in this session
+        const { data: existingParticipant, error: checkError } = await db.from('session_participants')
+            .select('id')
+            .match({ session_id: battleId, player_id: user.id })
+            .maybeSingle(); // Use maybeSingle to not error if nothing is found
 
-        // Navigate to the lobby
+        if (checkError) {
+            showToast('Error checking battle status.', true);
+            console.error(checkError);
+            return;
+        }
+
+        // If the user is NOT already in the game, add them.
+        if (!existingParticipant) {
+            const { error: insertError } = await db.from('session_participants')
+                .insert({ session_id: battleId, player_id: user.id });
+
+            if (insertError) {
+                // Handle the case where there might be a race condition
+                if (insertError.code === '23505') { // 23505 is the code for unique_violation
+                    console.warn('Race condition on join, but already a participant. Ignoring.');
+                } else {
+                    showToast('Could not join battle.', true);
+                    console.error('Join battle error:', insertError);
+                    return;
+                }
+            }
+        }
+        // ---- NEW CODE END ----
+
+        // Whether we just joined or were already here, navigate to the lobby.
         navigateToLobby(battleId);
+
+        // Clean the URL so refreshing the page doesn't try to rejoin
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
 
