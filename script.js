@@ -110,29 +110,45 @@ if (friendSearchBtn && friendSearchInput && friendSearchResults) {
         });
     });
 
-    // Event delegation for the dynamically created "Add" buttons
+    // --- Replace the old friendSearchResults event listener with this one ---
     friendSearchResults.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('add-friend-btn')) {
-            const addresseeId = e.target.dataset.id;
-            const requesterId = (await db.auth.getUser()).data.user.id;
+        // Ensure we only act on clicks on the "Add" button itself
+        if (!e.target.matches('.add-friend-btn')) {
+            return;
+        }
 
-            if (addresseeId === requesterId) {
-                showToast("You can't add yourself!", true);
-                return;
-            }
+        const button = e.target;
+        const addresseeId = button.dataset.id;
+        const requesterId = playerData.id; // Use the globally stored player ID
 
-            const { error } = await db.from('friendships').insert({
-                requester_id: requesterId,
-                addressee_id: addresseeId,
-            });
+        // Disable the button immediately to prevent double-clicks
+        button.disabled = true;
+        button.textContent = 'Adding...';
 
-            if (error) {
-                showToast('Friend request already sent or error.', true);
+        if (addresseeId === requesterId) {
+            showToast("You can't add yourself!", true);
+            button.textContent = 'Add';
+            button.disabled = false;
+            return;
+        }
+
+        const { error } = await db.from('friendships').insert({
+            requester_id: requesterId,
+            addressee_id: addresseeId,
+        });
+
+        if (error) {
+            // The most common error is '23505' for unique_violation, meaning a request already exists.
+            if (error.code === '23505') {
+                showToast('A friend request already exists with this user.');
             } else {
-                showToast('Friend request sent!');
-                e.target.disabled = true;
-                e.target.textContent = 'Sent';
+                showToast('Error sending request. Please try again.', true);
+                console.error('Friend request error:', error);
             }
+            button.textContent = 'Error'; // Give feedback
+        } else {
+            showToast('Friend request sent!');
+            button.textContent = 'Sent'; // The button remains disabled
         }
     });
 }
@@ -186,7 +202,7 @@ async function createBattle() {
     // 2. Create the game session in the database
     const { data: session, error } = await db.from('game_sessions')
         .insert({
-            questions: battleQuestions.map(q => q.question), // Store only question text for smaller payload
+            questions: battleQuestions.map(q => q.id), // Store the array of question IDs
             host_id: playerData.id
         })
         .select()
@@ -205,21 +221,31 @@ async function createBattle() {
     navigateToLobby(session.id);
 }
 
+// --- Replace the old startBattleRound function with this one ---
 async function startBattleRound(questionIndex) {
-    // Show the battle screen
     showScreen('battle-quiz-screen');
     document.getElementById('battle-timer-overlay').classList.add('hidden');
 
-    // Get the full question details from the master list
+    // Get the array of question IDs for this session
     const { data: sessionData } = await db.from('game_sessions').select('questions').eq('id', currentSessionId).single();
-    const questionText = sessionData.questions[questionIndex];
-    const question = masterQuestionList.find(q => q.question === questionText);
-
-    if (!question) {
-        showToast('Error loading question!', true);
+    if (!sessionData || !sessionData.questions) {
+        showToast('Error: Could not retrieve battle questions.', true);
         return;
     }
 
+    // Get the specific question ID for the current round
+    const questionId = sessionData.questions[questionIndex];
+    
+    // Find the full question object from our master list using its ID
+    const question = masterQuestionList.find(q => q.id === questionId);
+
+    if (!question) {
+        showToast('Error loading question!', true);
+        console.error(`Could not find question with ID: ${questionId}`);
+        return;
+    }
+
+    // The rest of the function is the same
     document.getElementById('battle-question-text').textContent = question.question;
     const choicesContainer = document.getElementById('battle-choices-container');
     choicesContainer.innerHTML = '';
@@ -533,13 +559,24 @@ async function loadUserAndStartApp() {
 }
 
 
+// --- Replace the old preloadAllQuestions function with this one ---
 async function preloadAllQuestions() {
     const allFilePaths = [];
     for (const year in quizStructure) for (const module in quizStructure[year]) for (const topic in quizStructure[year][module]) {
         allFilePaths.push(quizStructure[year][module][topic]);
     }
     const allPromises = allFilePaths.map(path => fetch(path).then(res => res.ok ? res.json() : Promise.reject()).catch(() => []));
-    masterQuestionList = (await Promise.all(allPromises)).flat();
+    const questionArrays = await Promise.all(allPromises);
+    
+    // Flatten the array of arrays and add a unique ID to each question
+    masterQuestionList = questionArrays.flat().map((q, index) => {
+        return {
+            ...q,
+            // Create a simple, unique ID. Using the index is easy and effective.
+            id: `q_${index}` 
+        };
+    });
+    
     console.log(`Preloaded ${masterQuestionList.length} questions in total.`);
 }
 
