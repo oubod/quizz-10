@@ -89,7 +89,20 @@ if (friendSearchBtn && friendSearchInput && friendSearchResults) {
         }
 
         friendSearchResults.innerHTML = '';
-        data.forEach(profile => {
+
+        // Get the current user's ID
+        const currentUserId = (await db.auth.getUser()).data.user.id;
+
+        // Filter out the current user from the search results
+        const otherUsers = data.filter(profile => profile.id !== currentUserId);
+
+        if (otherUsers.length === 0) {
+            friendSearchResults.innerHTML = `<p class="text-slate-400 text-center">No other users found.</p>`;
+            return;
+        }
+
+        otherUsers.forEach(profile => {
+            // This loop now only shows other people
             const resultEl = document.createElement('div');
             resultEl.className = 'flex justify-between items-center p-2';
             resultEl.innerHTML = `<span>${profile.username}</span> <button data-id="${profile.id}" class="add-friend-btn game-btn game-btn-start text-sm py-1 px-3">Add</button>`;
@@ -286,9 +299,12 @@ function navigateToLobby(sessionId) {
     battleChannel
         .on('broadcast', { event: 'player_joined' }, (payload) => {
             console.log('Event: player_joined', payload);
-            // Add the new player to our local state and update the UI
-            battleParticipants[payload.profile.id] = { username: payload.profile.username, score: 0 };
-            updateLobbyUI();
+            // NEW, FIXED CODE
+            const profile = payload.payload.profile;
+            if (profile) {
+                battleParticipants[profile.id] = { username: profile.username, score: 0 };
+                updateLobbyUI();
+            }
         })
         .on('broadcast', { event: 'game_start' }, (payload) => {
             console.log('Event: game_start');
