@@ -18,22 +18,40 @@ const magicLinkBtn = document.getElementById('magic-link-btn');
 let currentUser = null;
 
 // Check if user is already logged in
+// Update the checkUser function (around line 20)
 async function checkUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-        currentUser = user;
-        updateAuthUI();
-        // If we have a user, update the player name with their email
-        if (playerNameEl) {
-            const email = user.email;
-            const username = email.substring(0, email.indexOf('@'));
-            playerData.name = username;
-            savePlayerData();
-            updateUI();
+    try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error) {
+            console.error('Auth error:', error);
+            throw error;
         }
-    } else {
-        // Show auth modal automatically if no user is logged in
+        
+        if (user) {
+            currentUser = user;
+            updateAuthUI();
+            // If we have a user, update the player name with their email
+            if (playerNameEl) {
+                const email = user.email;
+                const username = email.substring(0, email.indexOf('@'));
+                playerData.name = username;
+                savePlayerData();
+                updateUI();
+            }
+            return true; // User is logged in
+        } else {
+            // Show auth modal automatically if no user is logged in
+            authModal.classList.remove('hidden');
+            // Disable the close button until logged in
+            closeAuthBtn.disabled = true;
+            closeAuthBtn.classList.add('opacity-50');
+            return false; // User is not logged in
+        }
+    } catch (error) {
+        console.error('Error checking user:', error);
         authModal.classList.remove('hidden');
+        return false;
     }
 }
 
@@ -59,8 +77,14 @@ authBtn.addEventListener('click', () => {
     }
 });
 
+// Replace the closeAuthBtn event listener (around line 60)
 closeAuthBtn.addEventListener('click', () => {
-    authModal.classList.add('hidden');
+    // Only allow closing if user is logged in
+    if (currentUser) {
+        authModal.classList.add('hidden');
+    } else {
+        showToast('Please log in or sign up to continue');
+    }
 });
 
 loginTab.addEventListener('click', () => {
@@ -91,6 +115,7 @@ loginBtn.addEventListener('click', async () => {
         return;
     }
     
+    // Update the login success handler (around line 90)
     try {
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -100,18 +125,25 @@ loginBtn.addEventListener('click', async () => {
         if (error) throw error;
         
         currentUser = data.user;
-        showToast('Logged in successfully!');
-        authModal.classList.add('hidden');
         updateAuthUI();
         
-        // Update player name
-        const username = email.substring(0, email.indexOf('@'));
-        playerData.name = username;
-        savePlayerData();
-        updateUI();
+        // Enable close button and hide modal
+        closeAuthBtn.disabled = false;
+        closeAuthBtn.classList.remove('opacity-50');
+        authModal.classList.add('hidden');
         
+        // Update player name
+        if (playerNameEl) {
+            const username = email.substring(0, email.indexOf('@'));
+            playerData.name = username;
+            savePlayerData();
+            updateUI();
+        }
+        
+        showToast('Logged in successfully!');
     } catch (error) {
-        showToast(error.message);
+        console.error('Login error:', error);
+        showToast(error.message || 'Login failed');
     }
 });
 
