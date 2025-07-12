@@ -1,0 +1,242 @@
+[
+  {
+    "question": "ECG d'une étudiante de 20 ans se plaignant d'un rythme cardiaque irrégulier. Son cœur et sa radiographie thoracique sont cliniquement normaux. Quel est le diagnostic principal sur cet ECG ?",
+    "image": "data/images/ecg1.png",
+    "choices": [
+      "Extrasystoles ventriculaires",
+      "Extrasystoles atriales",
+      "Fibrillation atriale",
+      "Rythme normal"
+    ],
+    "answer": "Extrasystoles ventriculaires",
+    "explanation": "L'ECG montre un rythme sinusal à 100 bpm avec de fréquentes extrasystoles ventriculaires. Chez un jeune patient avec un cœur structurellement normal, ces extrasystoles sont généralement bénignes et ne nécessitent pas de traitement spécifique, hormis l'éviction de stimulants comme la caféine."
+  },
+  {
+    "question": "Homme de 60 ans avec une douleur thoracique vague à l'effort. Que montre cet ECG ?",
+    "image": "data/images/ecg2.png",
+    "choices": [
+      "Infarctus inférieur ancien",
+      "Infarctus antérieur aigu",
+      "Péricardite aiguë",
+      "Hypertrophie ventriculaire gauche"
+    ],
+    "answer": "Infarctus inférieur ancien",
+    "explanation": "L'ECG montre des ondes Q proéminentes et des ondes T négatives dans les dérivations inférieures (DII, DIII, aVF), typiques d'un infarctus du myocarde inférieur ancien (nécrose séquellaire). Sa douleur à l'effort suggère une angine de poitrine qui nécessite une exploration de sa maladie coronaire."
+  },
+  {
+    "question": "Femme de 80 ans admise pour une fracture de la hanche après une chute, avec un pouls très lent. Que montre l'ECG ?",
+    "image": "data/images/ecg3.png",
+    "choices": [
+      "Bloc atrioventriculaire complet (BAV III)",
+      "Bloc atrioventriculaire du second degré (Mobitz II)",
+      "Bradycardie sinusale extrême",
+      "Rythme jonctionnel"
+    ],
+    "answer": "Bloc atrioventriculaire complet (BAV III)",
+    "explanation": "L'ECG montre une dissociation complète entre les ondes P (rythme atrial à 130 bpm) et les complexes QRS (rythme d'échappement ventriculaire à 23 bpm). C'est un bloc atrioventriculaire complet, une urgence médicale nécessitant la pose d'un stimulateur cardiaque avant la chirurgie de la hanche."
+  },
+  {
+    "question": "Homme de 50 ans avec une douleur thoracique intense depuis 18 heures. Quel est le diagnostic ECG ?",
+    "image": "data/images/ecg4.png",
+    "choices": [
+      "Infarctus antérieur aigu (IDM ST+)",
+      "Infarctus inférieur ancien",
+      "Angor instable (IDM non ST+)",
+      "Péricardite"
+    ],
+    "answer": "Infarctus antérieur aigu (IDM ST+)",
+    "explanation": "L'ECG montre un sus-décalage du segment ST et des ondes Q de V2 à V4, ainsi que des ondes T négatives en DI, aVL, V2-V6. C'est un infarctus du myocarde antérieur aigu (IDM ST+). Même après 18h, si la douleur persiste, une revascularisation urgente (angioplastie) est à discuter."
+  },
+  {
+    "question": "Cet ECG a été enregistré chez un étudiant en médecine en bonne santé. Quelle est cette variation normale du rythme ?",
+    "image": "data/images/ecg5.png",
+    "choices": [
+      "Arythmie sinusale",
+      "Extrasystoles atriales",
+      "Rythme jonctionnel",
+      "Flutter atrial"
+    ],
+    "answer": "Arythmie sinusale",
+    "explanation": "L'ECG est normal et montre une arythmie sinusale, qui est une variation de la fréquence cardiaque liée à la respiration. L'intervalle R-R se raccourcit à l'inspiration et s'allonge à l'expiration. C'est un phénomène physiologique courant, surtout chez les jeunes."
+  },
+  {
+    "question": "Femme de 26 ans admise pour des palpitations. Quel est le trouble du rythme ?",
+    "image": "data/images/ecg6.png",
+    "choices": [
+      "Tachycardie supraventriculaire (TSV)",
+      "Fibrillation atriale",
+      "Tachycardie ventriculaire",
+      "Tachycardie sinusale"
+    ],
+    "answer": "Tachycardie supraventriculaire (TSV)",
+    "explanation": "L'ECG montre une tachycardie régulière à complexes fins à environ 200 bpm, sans ondes P visibles. Il s'agit d'une tachycardie supraventriculaire, probablement une tachycardie par réentrée intranodale (TRIN). Le traitement peut inclure des manœuvres vagales ou de l'adénosine IV."
+  },
+  {
+    "question": "Homme de 60 ans avec une douleur thoracique intense depuis une heure. Quel est le diagnostic ECG ?",
+    "image": "data/images/ecg7.png",
+    "choices": [
+      "Infarctus antérolatéral aigu (IDM ST+)",
+      "Infarctus inférieur aigu",
+      "Péricardite diffuse",
+      "Bloc de branche gauche aigu"
+    ],
+    "answer": "Infarctus antérolatéral aigu (IDM ST+)",
+    "explanation": "L'ECG montre un sus-décalage du segment ST dans les dérivations DI, aVL, et V3-V6, ainsi que des ondes Q en V2-V3. C'est un infarctus du myocarde antérolatéral aigu (IDM ST+) nécessitant une angioplastie primaire immédiate."
+  },
+  {
+    "question": "Homme de 70 ans avec vertiges à l'effort et souffle systolique. Que montre l'ECG ?",
+    "image": "data/images/ecg8.png",
+    "choices": [
+      "Hypertrophie ventriculaire gauche (HVG)",
+      "Hypertrophie ventriculaire droite (HVD)",
+      "Infarctus inférieur ancien",
+      "Bloc de branche droit"
+    ],
+    "answer": "Hypertrophie ventriculaire gauche (HVG)",
+    "explanation": "L'ECG montre des signes d'hypertrophie ventriculaire gauche (indices de Sokolow-Lyon R en V5 + S en V2 > 35 mm) avec des troubles secondaires de la repolarisation (ondes T négatives en latéral). Associé aux symptômes, cela suggère une sténose aortique sévère, qui doit être confirmée par échocardiographie."
+  },
+  {
+    "question": "Homme de 70 ans avec une douleur thoracique intense. Quel est le diagnostic complet sur cet ECG ?",
+    "image": "data/images/ecg9.png",
+    "choices": [
+      "IDM inférieur aigu avec BAV II (Wenckebach)",
+      "IDM antérieur aigu",
+      "BAV III complet",
+      "Péricardite avec trouble de conduction"
+    ],
+    "answer": "IDM inférieur aigu avec BAV II (Wenckebach)",
+    "explanation": "L'ECG montre un sus-décalage du segment ST en DII, DIII, aVF (IDM inférieur ST+) et un allongement progressif de l'intervalle PR jusqu'à une onde P bloquée (BAV du second degré type Wenckebach). Ce trouble de conduction est fréquent dans l'infarctus inférieur et souvent transitoire."
+  },
+  {
+    "question": "Homme de 50 ans avec douleur thoracique qui s'effondre pendant l'enregistrement de l'ECG. Quel événement rythmique s'est produit ?",
+    "image": "data/images/ecg10.png",
+    "choices": [
+      "Fibrillation ventriculaire",
+      "Torsade de pointes",
+      "Asystolie",
+      "Tachycardie ventriculaire soutenue"
+    ],
+    "answer": "Fibrillation ventriculaire",
+    "explanation": "L'ECG montre un rythme sinusal avec des signes d'infarctus inférieur (sus-décalage ST en DII/DIII) qui dégénère en tachycardie ventriculaire puis en fibrillation ventriculaire après une extrasystole 'R sur T'. C'est un arrêt cardiaque nécessitant une défibrillation immédiate (choc électrique externe)."
+  },
+  {
+    "question": "Homme de 55 ans avec douleurs thoraciques au repos depuis 6 heures, troponine normale. Quel est le diagnostic ?",
+    "image": "data/images/ecg11.png",
+    "choices": [
+      "Angor instable (ischémie antérolatérale)",
+      "Infarctus antérieur aigu (IDM ST+)",
+      "Péricardite",
+      "ECG normal"
+    ],
+    "answer": "Angor instable (ischémie antérolatérale)",
+    "explanation": "L'ECG montre un sous-décalage du segment ST dans les dérivations antérieures et latérales (DI, aVL, V4-V6) avec une tachycardie sinusale à 130 bpm. Sans sus-décalage ni élévation de troponine, il s'agit d'un angor instable à haut risque (SCA non ST+), nécessitant un traitement médical agressif et une coronarographie."
+  },
+  {
+    "question": "Femme de 40 ans se plaignant de palpitations au moment de l'enregistrement. Quelle est l'anomalie ?",
+    "image": "data/images/ecg12.png",
+    "choices": [
+      "Tachycardie atriale et extrasystole atriale",
+      "Tachycardie jonctionnelle",
+      "Fibrillation atriale paroxystique",
+      "Extrasystoles ventriculaires"
+    ],
+    "answer": "Tachycardie atriale et extrasystole atriale",
+    "explanation": "L'ECG montre une salve de tachycardie atriale (ondes P anormales, négatives, à 100 bpm) suivie d'un retour au rythme sinusal, puis d'une extrasystole atriale. Ces arythmies expliquent les symptômes de la patiente."
+  },
+  {
+    "question": "Femme de 40 ans avec essoufflement croissant. Que suggèrent l'ECG et la radiographie thoracique (non montrée) ?",
+    "image": "data/images/ecg13.png",
+    "choices": [
+      "Hypertrophie ventriculaire droite sévère",
+      "Hypertrophie ventriculaire gauche",
+      "Cardiomyopathie dilatée",
+      "Infarctus du myocarde ancien"
+    ],
+    "answer": "Hypertrophie ventriculaire droite sévère",
+    "explanation": "L'ECG montre des signes d'hypertrophie ventriculaire droite sévère : déviation axiale droite, ondes P pulmonaires, onde R dominante en V1, et ondes T négatives de V1 à V3. Cela suggère une hypertension pulmonaire sévère, dont la cause doit être recherchée de manière urgente."
+  },
+  {
+    "question": "Homme de 80 ans avec insuffisance cardiaque et pouls lent. Quel est le diagnostic ECG ?",
+    "image": "data/images/ecg14.png",
+    "choices": [
+      "Fibrillation atriale avec bloc de branche gauche (BBG)",
+      "BAV III complet",
+      "Rythme idioventriculaire",
+      "Hypertrophie ventriculaire gauche"
+    ],
+    "answer": "Fibrillation atriale avec bloc de branche gauche (BBG)",
+    "explanation": "L'ECG montre une fibrillation atriale (rythme irrégulier sans ondes P) avec une réponse ventriculaire lente (40 bpm) et un aspect de bloc de branche gauche (QRS larges, aspect en M en latéral). La bradycardie peut contribuer à l'insuffisance cardiaque et nécessiter un pacemaker."
+  },
+  {
+    "question": "Homme de 40 ans admis en urgence pour insuffisance cardiaque aiguë. Quel est le trouble du rythme ?",
+    "image": "data/images/ecg15.png",
+    "choices": [
+      "Flutter atrial avec conduction 2:1",
+      "Tachycardie supraventriculaire (TSV)",
+      "Fibrillation atriale à réponse rapide",
+      "Tachycardie ventriculaire"
+    ],
+    "answer": "Flutter atrial avec conduction 2:1",
+    "explanation": "L'ECG montre un flutter atrial (ondes F en dents de scie bien visibles en DII, DIII, aVF) avec une conduction atrio-ventriculaire 2:1, résultant en une fréquence ventriculaire régulière à 150 bpm. Cette tachycardie a probablement décompensé une cardiopathie sous-jacente."
+  },
+  {
+    "question": "Homme de 50 ans avec douleur thoracique typique d'infarctus depuis 4 heures. Que montre l'ECG ?",
+    "image": "data/images/ecg16.png",
+    "choices": [
+      "Infarctus inférieur aigu (IDM ST+)",
+      "Infarctus antérieur aigu",
+      "Péricardite",
+      "Infarctus postérieur"
+    ],
+    "answer": "Infarctus inférieur aigu (IDM ST+)",
+    "explanation": "L'ECG montre un sus-décalage du segment ST dans les dérivations inférieures (DII, DIII, aVF) avec un miroir (sous-décalage) en latéral. C'est un infarctus du myocarde inférieur aigu (IDM ST+) qui requiert une angioplastie primaire urgente."
+  },
+  {
+    "question": "Femme de 75 ans avec gêne thoracique et syncope à l'effort. Quelle est l'anomalie de conduction sur l'ECG ?",
+    "image": "data/images/ecg17.png",
+    "choices": [
+      "Bloc de branche gauche (BBG)",
+      "Bloc de branche droit (BBD)",
+      "Hémibloc antérieur gauche",
+      "Syndrome de Wolff-Parkinson-White"
+    ],
+    "answer": "Bloc de branche gauche (BBG)",
+    "explanation": "L'ECG montre un bloc de branche gauche complet (QRS larges > 120ms, aspect en M en V6). Chez une patiente avec des symptômes de syncope d'effort, cela doit faire suspecter une pathologie sous-jacente sévère, comme une sténose aortique ou une maladie coronarienne."
+  },
+  {
+    "question": "Homme de 48 ans avec douleur thoracique intense depuis une heure. Quel est le diagnostic ECG ?",
+    "image": "data/images/ecg18.png",
+    "choices": [
+      "Infarctus antérieur sans sus-décalage ST (IDM non ST+)",
+      "Infarctus antérieur avec sus-décalage ST (IDM ST+)",
+      "Péricardite aiguë",
+      "Repolarisation précoce"
+    ],
+    "answer": "Infarctus antérieur sans sus-décalage ST (IDM non ST+)",
+    "explanation": "L'ECG montre des ondes T négatives et profondes dans les dérivations précordiales (V1-V5) et une déviation axiale gauche. C'est l'aspect typique d'un infarctus du myocarde antérieur sans sus-décalage ST (IDM non ST+), ou syndrome de Wellens, indiquant une sténose critique de l'artère interventriculaire antérieure."
+  },
+  {
+    "question": "Étudiant de 20 ans se plaignant de palpitations paroxystiques. Quel syndrome est visible sur cet ECG de repos ?",
+    "image": "data/images/ecg19.png",
+    "choices": [
+      "Syndrome de Wolff-Parkinson-White (WPW)",
+      "Syndrome de Brugada",
+      "Syndrome du QT long",
+      "Hypertrophie ventriculaire droite"
+    ],
+    "answer": "Syndrome de Wolff-Parkinson-White (WPW)",
+    "explanation": "L'ECG montre les signes classiques du syndrome de Wolff-Parkinson-White : intervalle PR court (<120ms), complexe QRS large (>120ms) et une onde delta (empâtement initial du QRS). Ceci est dû à une voie de conduction accessoire entre les oreillettes et les ventricules."
+  },
+  {
+    "question": "Homme de 70 ans, traité pour angor, avec une douleur thoracique plus intense. Que montrent l'ECG et la radiographie (non montrée) ?",
+    "image": "data/images/ecg20.png",
+    "choices": [
+      "Fibrillation atriale avec bloc de branche gauche (BBG)",
+      "Infarctus aigu avec bloc de branche",
+      "BAV III complet",
+      "Tachycardie ventriculaire"
+    ],
+    "answer": "Fibrillation atriale avec bloc de branche gauche (BBG)",
+    "explanation": "L'ECG montre une fibrillation atriale avec une réponse ventriculaire contrôlée et un bloc de branche gauche (QRS larges, aspect en M en V5-V6). La douleur thoracique peut être due à une ischémie (infarctus) et la présence d'un BBG (potentiellement nouveau) est un critère de gravité nécessitant une évaluation urgente."
+  }
+]
