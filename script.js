@@ -123,6 +123,8 @@ async function loadPlayerData() {
             }
         }
     } else {
+        // In the loadPlayerData() function, modify the else block:
+        else {
         // User not logged in, use localStorage as fallback
         const savedData = localStorage.getItem('medQuizPlayerData');
         if (savedData) {
@@ -133,7 +135,11 @@ async function loadPlayerData() {
                 name: '', theme: 'theme-dark-blue', lastPlayedDate: null, streak: 0,
                 achievements: achievementsList, quizzesCompleted: 0
             };
-            welcomeModal.classList.remove('hidden');
+            // Only show welcome modal if auth modal is not showing
+            if (!authModal || authModal.classList.contains('hidden')) {
+                welcomeModal.classList.remove('hidden');
+            }
+        }
         }
     }
     
@@ -315,11 +321,15 @@ const saveBookmarks = () => {
 
 // --- Core App Logic ---
 async function initializeApp() {
+    // Check authentication first
+    await checkUser();
+    
+    // Then proceed with other initialization
     loadPlayerData();
     populateThemeOptions();
     loadBookmarks();
     try {
-        const response = await fetch('data/manifest.json');
+        const response = await fetch('./data/manifest.json');
         if (!response.ok) throw new Error('Manifest not found');
         quizStructure = await response.json();
         populateYears();

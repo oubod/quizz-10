@@ -31,6 +31,9 @@ async function checkUser() {
             savePlayerData();
             updateUI();
         }
+    } else {
+        // Show auth modal automatically if no user is logged in
+        authModal.classList.remove('hidden');
     }
 }
 
