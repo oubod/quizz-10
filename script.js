@@ -272,11 +272,24 @@ function updateBattleScoreboard() {
     }
 }
 
-function navigateToLobby(sessionId) {
+async function navigateToLobby(sessionId) {
     currentSessionId = sessionId;
-    battleParticipants = {}; // Reset participants for the new lobby
+    battleParticipants = {};
 
-    // Show the lobby screen and hide others
+    // ---- NEW CODE START ----
+    // Fetch the session details to know who the host is
+    const { data: sessionData, error } = await db.from('game_sessions')
+        .select('host_id')
+        .eq('id', sessionId)
+        .single();
+
+    if (error || !sessionData) {
+        showToast('Could not load battle lobby.', true);
+        showScreen('start-screen'); // Go back home if lobby fails
+        return;
+    }
+    // ---- NEW CODE END ----
+
     showScreen('battle-lobby-screen');
 
     // Populate the invite link
@@ -299,11 +312,10 @@ function navigateToLobby(sessionId) {
     battleChannel
         .on('broadcast', { event: 'player_joined' }, (payload) => {
             console.log('Event: player_joined', payload);
-            // NEW, FIXED CODE
             const profile = payload.payload.profile;
             if (profile) {
                 battleParticipants[profile.id] = { username: profile.username, score: 0 };
-                updateLobbyUI();
+                updateLobbyUI(sessionData.host_id); // Pass the host ID here
             }
         })
         .on('broadcast', { event: 'game_start' }, (payload) => {
@@ -312,7 +324,6 @@ function navigateToLobby(sessionId) {
         })
         .on('broadcast', { event: 'player_answered' }, (payload) => {
             console.log('Event: player_answered', payload);
-            // Update the score for the player who answered
             if(battleParticipants[payload.playerId]) {
                 battleParticipants[payload.playerId].score = payload.newScore;
             }
@@ -320,17 +331,13 @@ function navigateToLobby(sessionId) {
         })
         .on('broadcast', { event: 'round_over' }, (payload) => {
             console.log('Event: round_over');
-            // Update scores for everyone and show the results for a few seconds
             updateBattleScoreboard();
-            document.getElementById('battle-timer-overlay').classList.remove('hidden'); // Show "Waiting..."
+            document.getElementById('battle-timer-overlay').classList.remove('hidden');
         })
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                // Announce that we have joined the battle
-                // We need to fetch our own profile to send it
                 const { data: { user } } = await db.auth.getUser();
                 const { data: profile } = await db.from('profiles').select('id, username').eq('id', user.id).single();
-                
                 await battleChannel.send({
                     type: 'broadcast',
                     event: 'player_joined',
@@ -338,15 +345,17 @@ function navigateToLobby(sessionId) {
                 });
             }
         });
-    
+
     // The "Start Battle" button is only for the host
     document.getElementById('start-battle-btn').onclick = () => {
-        // Broadcast the game start event
         battleChannel.send({ type: 'broadcast', event: 'game_start', payload: { questionIndex: 0 } });
     };
+
+    // Initial UI update with host_id
+    updateLobbyUI(sessionData.host_id);
 }
 
-function updateLobbyUI() {
+function updateLobbyUI(hostId) {
     const playerListEl = document.getElementById('lobby-player-list');
     playerListEl.innerHTML = '';
     
@@ -356,8 +365,9 @@ function updateLobbyUI() {
         playerListEl.appendChild(li);
     });
 
-    // Show host controls if the current player is the host
-    if (playerData.id === Object.keys(battleParticipants)[0]) { // Simple assumption: first to join is host
+    // ---- THIS IS THE KEY CHANGE ----
+    // Check if the current player's ID matches the fetched hostId
+    if (playerData.id === hostId) { 
         document.getElementById('host-controls').classList.remove('hidden');
         document.getElementById('guest-message').classList.add('hidden');
     } else {
