@@ -118,9 +118,56 @@
                     <!-- You can dynamically generate this list later based on playerData.achievements -->
                     <p class="text-slate-300">This is where a list of unlocked achievements would go. Coming soon!</p>
                 </div>
+                <div class="game-card p-6 mt-6">
+                    <h2 class="text-xl font-bold mb-4">Find Friends</h2>
+                    <div class="flex gap-2">
+                        <input type="text" id="friend-search-input" placeholder="Search by username..." class="game-select flex-grow">
+                        <button id="friend-search-btn" class="game-btn game-btn-purple px-4">Search</button>
+                    </div>
+                    <div id="friend-search-results" class="mt-4"></div>
+                </div>
+                <button id="create-battle-btn" class="game-btn game-btn-yellow mt-6">Battle a Friend!</button>
             </div>
 
             <!-- Quiz Screen -->
+            <!-- Battle Lobby Screen (Waiting for players) -->
+            <div id="battle-lobby-screen" class="screen hidden text-center">
+                <h2 class="text-3xl font-black mb-4">Battle Lobby</h2>
+                <p class="text-slate-300 mb-6">Share this link with a friend to invite them!</p>
+
+                <div class="game-card p-4 mb-6">
+                    <input id="invite-link-input" type="text" readonly class="game-select w-full text-center" value="Generating link...">
+                    <button id="copy-invite-link-btn" class="game-btn game-btn-purple w-full mt-4">Copy Invite Link</button>
+                </div>
+
+                <div class="game-card p-6">
+                    <h3 class="text-xl font-bold mb-4">Players Joined</h3>
+                    <ul id="lobby-player-list" class="space-y-2 text-left">
+                        <!-- Player names will be injected here by JS -->
+                    </ul>
+                </div>
+                
+                <div id="host-controls" class="mt-6 hidden">
+                    <button id="start-battle-btn" class="game-btn game-btn-start w-full">Start Battle</button>
+                </div>
+                <p id="guest-message" class="mt-6 text-yellow-300 hidden">Waiting for the host to start the game...</p>
+            </div>
+
+            <!-- Battle Quiz Screen (The actual multiplayer game) -->
+            <div id="battle-quiz-screen" class="screen hidden">
+                <!-- Live Scoreboard -->
+                <div id="battle-scoreboard" class="flex justify-around items-center mb-4 gap-4 p-2 game-card">
+                    <!-- Scores will be injected here by JS -->
+                </div>
+
+                <div id="battle-question-content" class="game-card p-6 relative">
+                    <h2 id="battle-question-text" class="text-2xl font-extrabold mb-6 text-center">Loading...</h2>
+                    <div id="battle-choices-container" class="grid grid-cols-1 gap-4"></div>
+                    <div id="battle-timer-overlay" class="absolute inset-0 bg-black/50 flex items-center justify-center hidden">
+                        <p class="text-2xl font-bold text-white">Waiting for next round...</p>
+                    </div>
+                </div>
+            </div>
             <div id="quiz-screen" class="screen hidden">
                  <div class="flex justify-between items-center mb-4 gap-4">
                     <p class="text-lg flex-shrink-0">Score: <span id="score" class="font-extrabold">0</span></p>

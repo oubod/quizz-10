@@ -1,5 +1,10 @@
 
 // --- DOM Elements ---
+
+// NEW: Real-time Battle State
+let battleChannel = null;
+let currentSessionId = null;
+let battleParticipants = {}; // To store { id: { username, score } }
 const mascotEl = document.getElementById('mascot');
 const playerNameEl = document.getElementById('player-name');
 const streakCounterEl = document.getElementById('streak-counter');
@@ -65,6 +70,60 @@ const signupNameInput = document.getElementById('signup-name');
 const signupEmailInput = document.getElementById('signup-email');
 const signupPasswordInput = document.getElementById('signup-password');
 
+// --- Find Friends Elements ---
+const friendSearchBtn = document.getElementById('friend-search-btn');
+const friendSearchInput = document.getElementById('friend-search-input');
+const friendSearchResults = document.getElementById('friend-search-results');
+
+if (friendSearchBtn && friendSearchInput && friendSearchResults) {
+    friendSearchBtn.addEventListener('click', async () => {
+        const searchTerm = friendSearchInput.value.trim();
+        if (!searchTerm) return;
+
+        // Use 'ilike' for case-insensitive search
+        const { data, error } = await db.from('profiles').select('id, username').ilike('username', `%${searchTerm}%`);
+
+        if (error) {
+            showToast('Error searching for users.', true);
+            return;
+        }
+
+        friendSearchResults.innerHTML = '';
+        data.forEach(profile => {
+            const resultEl = document.createElement('div');
+            resultEl.className = 'flex justify-between items-center p-2';
+            resultEl.innerHTML = `<span>${profile.username}</span> <button data-id="${profile.id}" class="add-friend-btn game-btn game-btn-start text-sm py-1 px-3">Add</button>`;
+            friendSearchResults.appendChild(resultEl);
+        });
+    });
+
+    // Event delegation for the dynamically created "Add" buttons
+    friendSearchResults.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('add-friend-btn')) {
+            const addresseeId = e.target.dataset.id;
+            const requesterId = (await db.auth.getUser()).data.user.id;
+
+            if (addresseeId === requesterId) {
+                showToast("You can't add yourself!", true);
+                return;
+            }
+
+            const { error } = await db.from('friendships').insert({
+                requester_id: requesterId,
+                addressee_id: addresseeId,
+            });
+
+            if (error) {
+                showToast('Friend request already sent or error.', true);
+            } else {
+                showToast('Friend request sent!');
+                e.target.disabled = true;
+                e.target.textContent = 'Sent';
+            }
+        }
+    });
+}
+
 
 // --- Player Data, Themes, Achievements, and Quotes ---
 let playerData = {}; // This will now be populated from Supabase
@@ -97,6 +156,199 @@ let score = 0;
 let timer;
 let timeLeft = 20;
 let isTimerMode = true;
+
+
+// --- Battle Functions ---
+async function createBattle() {
+    playSound('click');
+    showToast('Creating a new battle room...');
+
+    // 1. Get 5 random questions for the battle
+    const battleQuestions = [...masterQuestionList].sort(() => 0.5 - Math.random()).slice(0, 5);
+    if (battleQuestions.length < 5) {
+        showToast('Not enough questions for a battle!', true);
+        return;
+    }
+
+    // 2. Create the game session in the database
+    const { data: session, error } = await db.from('game_sessions')
+        .insert({
+            questions: battleQuestions.map(q => q.question), // Store only question text for smaller payload
+            host_id: playerData.id
+        })
+        .select()
+        .single();
+    
+    if (error) {
+        showToast('Error creating battle. Please try again.', true);
+        console.error(error);
+        return;
+    }
+
+    // 3. The host automatically joins their own session
+    await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
+
+    // 4. Navigate to the lobby and start listening for events
+    navigateToLobby(session.id);
+}
+
+async function startBattleRound(questionIndex) {
+    // Show the battle screen
+    showScreen('battle-quiz-screen');
+    document.getElementById('battle-timer-overlay').classList.add('hidden');
+
+    // Get the full question details from the master list
+    const { data: sessionData } = await db.from('game_sessions').select('questions').eq('id', currentSessionId).single();
+    const questionText = sessionData.questions[questionIndex];
+    const question = masterQuestionList.find(q => q.question === questionText);
+
+    if (!question) {
+        showToast('Error loading question!', true);
+        return;
+    }
+
+    document.getElementById('battle-question-text').textContent = question.question;
+    const choicesContainer = document.getElementById('battle-choices-container');
+    choicesContainer.innerHTML = '';
+    question.choices.forEach(choice => {
+        const button = document.createElement('button');
+        button.textContent = choice;
+        button.className = 'game-btn';
+        button.onclick = () => handleBattleAnswer(choice, question.answer);
+        choicesContainer.appendChild(button);
+    });
+
+    updateBattleScoreboard();
+}
+
+async function handleBattleAnswer(selectedChoice, correctAnswer) {
+    // Disable all choice buttons immediately
+    document.querySelectorAll('#battle-choices-container button').forEach(b => b.disabled = true);
+    
+    let currentScore = battleParticipants[playerData.id].score || 0;
+    if (selectedChoice === correctAnswer) {
+        currentScore += 100; // Simple scoring
+        playSound('correct');
+    } else {
+        playSound('incorrect');
+    }
+
+    // Update your own score in the database
+    await db.from('session_participants')
+      .update({ score: currentScore, answers: { /* you could log the answer here */ } })
+      .match({ session_id: currentSessionId, player_id: playerData.id });
+
+    // Announce to everyone that you have answered and what your new score is
+    await battleChannel.send({
+        type: 'broadcast',
+        event: 'player_answered',
+        payload: { playerId: playerData.id, newScore: currentScore }
+    });
+}
+
+function updateBattleScoreboard() {
+    const scoreboardEl = document.getElementById('battle-scoreboard');
+    scoreboardEl.innerHTML = '';
+
+    for (const id in battleParticipants) {
+        const player = battleParticipants[id];
+        const scoreDiv = document.createElement('div');
+        scoreDiv.className = 'text-center';
+        scoreDiv.innerHTML = `<div class="font-bold text-lg">${player.username}</div><div>${player.score}</div>`;
+        scoreboardEl.appendChild(scoreDiv);
+    }
+}
+
+function navigateToLobby(sessionId) {
+    currentSessionId = sessionId;
+    battleParticipants = {}; // Reset participants for the new lobby
+
+    // Show the lobby screen and hide others
+    showScreen('battle-lobby-screen');
+
+    // Populate the invite link
+    const inviteLink = `${window.location.origin}${window.location.pathname}?battle=${sessionId}`;
+    const inviteLinkInput = document.getElementById('invite-link-input');
+    inviteLinkInput.value = inviteLink;
+    document.getElementById('copy-invite-link-btn').onclick = () => {
+        navigator.clipboard.writeText(inviteLink).then(() => showToast('Invite link copied!'));
+    };
+
+    // Unsubscribe from any old channel first to prevent duplicate listeners
+    if (battleChannel) {
+        battleChannel.unsubscribe();
+    }
+
+    // Create a unique Supabase channel for this battle
+    battleChannel = db.channel(`battle-${sessionId}`);
+
+    // Set up all our event listeners for this battle
+    battleChannel
+        .on('broadcast', { event: 'player_joined' }, (payload) => {
+            console.log('Event: player_joined', payload);
+            // Add the new player to our local state and update the UI
+            battleParticipants[payload.profile.id] = { username: payload.profile.username, score: 0 };
+            updateLobbyUI();
+        })
+        .on('broadcast', { event: 'game_start' }, (payload) => {
+            console.log('Event: game_start');
+            startBattleRound(payload.questionIndex);
+        })
+        .on('broadcast', { event: 'player_answered' }, (payload) => {
+            console.log('Event: player_answered', payload);
+            // Update the score for the player who answered
+            if(battleParticipants[payload.playerId]) {
+                battleParticipants[payload.playerId].score = payload.newScore;
+            }
+            // Optional: Update the UI to show the player has answered
+        })
+        .on('broadcast', { event: 'round_over' }, (payload) => {
+            console.log('Event: round_over');
+            // Update scores for everyone and show the results for a few seconds
+            updateBattleScoreboard();
+            document.getElementById('battle-timer-overlay').classList.remove('hidden'); // Show "Waiting..."
+        })
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                // Announce that we have joined the battle
+                // We need to fetch our own profile to send it
+                const { data: { user } } = await db.auth.getUser();
+                const { data: profile } = await db.from('profiles').select('id, username').eq('id', user.id).single();
+                
+                await battleChannel.send({
+                    type: 'broadcast',
+                    event: 'player_joined',
+                    payload: { profile },
+                });
+            }
+        });
+    
+    // The "Start Battle" button is only for the host
+    document.getElementById('start-battle-btn').onclick = () => {
+        // Broadcast the game start event
+        battleChannel.send({ type: 'broadcast', event: 'game_start', payload: { questionIndex: 0 } });
+    };
+}
+
+function updateLobbyUI() {
+    const playerListEl = document.getElementById('lobby-player-list');
+    playerListEl.innerHTML = '';
+    
+    Object.values(battleParticipants).forEach(player => {
+        const li = document.createElement('li');
+        li.textContent = `✅ ${player.username}`;
+        playerListEl.appendChild(li);
+    });
+
+    // Show host controls if the current player is the host
+    if (playerData.id === Object.keys(battleParticipants)[0]) { // Simple assumption: first to join is host
+        document.getElementById('host-controls').classList.remove('hidden');
+        document.getElementById('guest-message').classList.add('hidden');
+    } else {
+        document.getElementById('host-controls').classList.add('hidden');
+        document.getElementById('guest-message').classList.remove('hidden');
+    }
+}
 
 // --- Data Management & UI Updates (Now with Supabase) ---
 // loadPlayerData is removed. Data is loaded on auth change.
@@ -522,18 +774,45 @@ tabBar.addEventListener('click', (e) => {
     }
 });
 
+// --- Battle Invite Handler ---
+async function checkForBattleInvite() {
+    const params = new URLSearchParams(window.location.search);
+    const battleId = params.get('battle');
+
+    if (battleId) {
+        showToast('Joining battle from invite link...');
+        const { data: { user } } = await db.auth.getUser();
+        if (!user) {
+            showToast('You must be logged in to join a battle!', true);
+            return;
+        }
+
+        // Add the user to the participants table
+        await db.from('session_participants').insert({ session_id: battleId, player_id: user.id });
+
+        // Navigate to the lobby
+        navigateToLobby(battleId);
+    }
+}
+
 // --- App Entry Point ---
 db.auth.onAuthStateChange((event, session) => {
     if (session) {
-        // User is logged in
-        loadUserAndStartApp();
+        loadUserAndStartApp().then(() => {
+            checkForBattleInvite(); // Check for invite AFTER user is loaded
+        });
     } else {
-        // User is logged out
-        playerData = {}; // Clear data
+        playerData = {};
         authScreen.classList.remove('hidden');
         appShell.classList.add('hidden');
     }
 });
+
+// --- Battle Event Listener ---
+const createBattleBtn = document.getElementById('create-battle-btn');
+if (createBattleBtn) {
+    createBattleBtn.addEventListener('click', createBattle);
+}
 
 // Initialize non-user-specific parts of the app
 initializeApp();
