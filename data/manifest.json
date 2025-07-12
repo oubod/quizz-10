@@ -1,16 +1,16 @@
 {
-  "Year 1": {
+  "year 1": {
     "physiology": {
-      "Milieu interieur": "./data/Year 1/physiology/mi.json",
-      "Physiologie nerveuse": "./data/Year 1/physiology/nerveux.json",
-      "bioenergetique": "./data/Year 1/physiology/thermoregulation.json",
-      "Thermoregulation": "./data/Year 1/physiology/bioenergetique.json"
+      "Milieu interieur": "./data/year 1/physiology/mi.json",
+      "Physiologie nerveuse": "./data/year 1/physiology/nerveux.json",
+      "bioenergetique": "./data/year 1/physiology/thermoregulation.json",
+      "Thermoregulation": "./data/year 1/physiology/bioenergetique.json"
     }
   },
-  "Year 3": {
-    "Cardiology": {
-      "ECG Basics": "./data/Year 3/Cardiology/ECG Basics.json",
-      "ECGs": "./data/Year 3/Cardiology/1.json"
+  "year 3": {
+    "cardiology": {
+      "ECG Basics": "./data/year 3/cardiology/ecg basics.json",
+      "ECGs": "./data/year 3/cardiology/1.json"
     }
   }
 }
