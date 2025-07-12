@@ -10,31 +10,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <!-- Add Supabase JS Client -->
+    <!-- NEW: Add Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="theme-dark-blue"> <!-- Start with a default theme class -->
 
     <canvas id="confetti-canvas"></canvas>
     <div id="toast-notification" class="toast"><span id="toast-text"></span></div>
 
-    <!-- Onboarding / Welcome Modal -->
-    <div id="welcome-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <div id="onboarding-step-1">
-                <h2 class="text-2xl font-black mb-4">Welcome to Med Trivia!</h2>
-                <p class="mb-4 text-slate-300">Test your knowledge and track your progress. First, what should we call you?</p>
-                <input type="text" id="name-input" placeholder="Your Name" class="game-select w-full text-center">
-                <button id="next-onboarding-btn" class="game-btn game-btn-start w-full mt-4">Next →</button>
-            </div>
-            <div id="onboarding-step-2" class="hidden">
-                 <h2 class="text-2xl font-black mb-4">How It Works</h2>
-                 <p class="mb-4 text-slate-300">Play every day to build your streak! Look for the ⚙️ icon to change your theme. You're all set!</p>
-                 <button id="finish-onboarding-btn" class="game-btn game-btn-start w-full mt-4">Let's Go!</button>
-            </div>
-        </div>
-    </div>
+    <!-- Onboarding / Welcome Modal is no longer needed, we use the auth screen -->
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay hidden">
@@ -43,156 +28,188 @@
             <div id="theme-options-container" class="flex justify-center gap-4">
                 <!-- Theme options will be injected here by JS -->
             </div>
-            <button id="close-settings-btn" class="game-btn game-btn-start w-full mt-8">Close</button>
+            <!-- NEW: Logout Button -->
+            <button id="logout-btn" class="game-btn game-btn-purple w-full mt-6">Logout</button>
+            <button id="close-settings-btn" class="game-btn game-btn-start w-full mt-4">Close</button>
         </div>
     </div>
 
-    <!-- Auth Modal -->
-    <div id="auth-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h2 class="text-2xl font-black mb-4">Account</h2>
-            <div id="auth-tabs" class="flex mb-4">
-                <button id="login-tab" class="border-b-2 border-blue-500 border-transparent">Login</button>
-                <button id="signup-tab" class="border-b-2 border-transparent">Sign Up</button>
+    <!-- App Shell structure -->
+    <!-- NEW: Initially hidden until user is logged in -->
+    <div id="app-shell" class="w-full max-w-lg mx-auto hidden">
+        <!-- App Header -->
+        <header id="app-header" class="p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="player-avatar" class="w-12 h-12 bg-purple-400 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-md">P</div>
+                    <div>
+                        <span class="text-sm text-slate-300">Welcome back,</span>
+                        <h2 id="player-name" class="text-lg font-bold -mt-1">Player</h2>
+                    </div>
+                </div>
+                <button id="open-settings-btn" class="theme-toggle">⚙️</button>
             </div>
-            
-            <div id="login-form">
-                <div class="mb-4">
-                    <label for="login-email" class="block text-sm font-bold text-slate-300 mb-1">Email</label>
-                    <input type="email" id="login-email" class="game-select w-full">
+        </header>
+
+        <!-- Main content area where screens will be swapped -->
+        <main id="app-content" class="p-4">
+            <!-- Start Screen -->
+            <div id="start-screen" class="screen text-center">
+                <img id="mascot" src="assets/images/mascot.png" alt="Quiz Mascot" class="w-40 h-40 mx-auto mb-2 mascot"/>
+                <h1 class="text-4xl font-black mb-1">Medical Faculty Trivia</h1>
+                <p class="text-slate-300 text-lg mb-6">Ready for a challenge?</p>
+
+                <div class="grid grid-cols-1 gap-4 w-full max-w-md mx-auto">
+                    <button id="daily-challenge-btn" class="game-btn game-btn-yellow">★ Daily Challenge</button>
+                    <button id="start-bookmarked-btn" class="game-btn game-btn-purple hidden">📚 My Bookmarks</button>
+                    <hr class="my-4 divider"/>
+                    <div class="game-card p-6 space-y-5">
+                        <div class="w-full text-left">
+                            <label for="year-select" class="text-sm font-bold text-slate-300 mb-1">Year</label>
+                            <select id="year-select" class="game-select"></select>
+                        </div>
+                        <div class="w-full text-left">
+                            <label for="module-select" class="text-sm font-bold text-slate-300 mb-1">Module</label>
+                            <select id="module-select" disabled class="game-select"></select>
+                        </div>
+                        <div class="w-full text-left">
+                            <label for="topic-select" class="text-sm font-bold text-slate-300 mb-1">Topic</label>
+                            <select id="topic-select" disabled class="game-select"></select>
+                        </div>
+                        <div class="w-full text-left">
+                            <label for="question-count-select" class="text-sm font-bold text-slate-300 mb-1">Questions</label>
+                            <select id="question-count-select" class="game-select">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="20">20</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                         <div class="w-full text-left">
+                            <label for="timer-mode-select" class="text-sm font-bold text-slate-300 mb-1">Timer Mode</label>
+                            <select id="timer-mode-select" class="game-select">
+                                <option value="timed" selected>With Timer</option>
+                                <option value="untimed">No Timer</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="start-btn" disabled class="game-btn game-btn-start mt-4">Start Topic Quiz</button>
                 </div>
-                <div class="mb-4">
-                    <label for="login-password" class="block text-sm font-bold text-slate-300 mb-1">Password</label>
-                    <input type="password" id="login-password" class="game-select w-full">
-                </div>
-                <button id="login-btn" class="game-btn game-btn-start w-full mb-2">Login</button>
-                <button id="magic-link-btn" class="game-btn game-btn-purple w-full">Send Magic Link</button>
             </div>
-            
-            <div id="signup-form" class="hidden">
-                <div class="mb-4">
-                    <label for="signup-email" class="block text-sm font-bold text-slate-300 mb-1">Email</label>
-                    <input type="email" id="signup-email" class="game-select w-full">
+
+            <!-- Profile Screen -->
+            <div id="profile-screen" class="screen hidden text-center">
+                 <h1 class="text-3xl font-black mb-6">Your Progress</h1>
+                 <div class="game-card p-4 mb-6">
+                    <div class="flex justify-around items-center">
+                        <div class="text-center">
+                            <div class="text-3xl font-black" id="streak-counter">0</div>
+                            <div class="text-sm text-slate-300">Day Streak</div>
+                        </div>
+                        <div class="w-px h-12 divider"></div>
+                        <div class="text-center">
+                            <div class="text-3xl font-black" id="achievements-unlocked">0/5</div>
+                            <div class="text-sm text-slate-300">Achievements</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-4">
-                    <label for="signup-password" class="block text-sm font-bold text-slate-300 mb-1">Password</label>
-                    <input type="password" id="signup-password" class="game-select w-full">
+                <div class="game-card p-6">
+                    <h2 class="text-xl font-bold mb-4">Achievements</h2>
+                    <!-- You can dynamically generate this list later based on playerData.achievements -->
+                    <p class="text-slate-300">This is where a list of unlocked achievements would go. Coming soon!</p>
                 </div>
-                <button id="signup-btn" class="game-btn game-btn-start w-full">Sign Up</button>
             </div>
-            
-            <button id="close-auth-btn" class="game-btn w-full mt-4">Close</button>
-        </div>
+
+            <!-- Quiz Screen -->
+            <div id="quiz-screen" class="screen hidden">
+                 <div class="flex justify-between items-center mb-4 gap-4">
+                    <p class="text-lg flex-shrink-0">Score: <span id="score" class="font-extrabold">0</span></p>
+                    <div class="w-full bg-blue-800 rounded-full h-4 progress-bar-bg"><div id="progress-bar" class="h-4 rounded-full"></div></div>
+                    <div id="timer-container" class="timer-display"><span id="timer">20</span></div>
+                </div>
+                <div id="skeleton-loader" class="game-card p-6 relative">
+                    <div class="skeleton w-3/4 h-8 mx-auto mb-8"></div>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="skeleton w-full h-16 rounded-full"></div>
+                        <div class="skeleton w-full h-16 rounded-full"></div>
+                        <div class="skeleton w-full h-16 rounded-full"></div>
+                    </div>
+                </div>
+                <div id="question-content" class="game-card p-6 relative hidden">
+                    <button id="bookmark-btn" aria-label="Bookmark this question" class="bookmark-btn">★</button>
+                    <img id="question-image" src="" alt="Question-related image" class="hidden max-h-60 w-auto mx-auto mb-4 rounded-lg bg-slate-700"/>
+                    <h2 id="question-text" class="text-2xl font-extrabold mb-6 text-center">Loading...</h2>
+                    <div id="choices-container" class="grid grid-cols-1 gap-4"></div>
+                    <div id="explanation-box" class="hidden mt-6 p-4 rounded-lg explanation-bg"><p id="explanation-text"></p></div>
+                </div>
+                <div class="text-center mt-6"><button id="next-btn" class="hidden game-btn game-btn-start">Next</button></div>
+            </div>
+
+            <!-- End Screen -->
+            <div id="end-screen" class="screen hidden text-center">
+                <h2 class="text-5xl font-black mb-4">Quiz Finished!</h2>
+                <p class="text-2xl mb-8">Final Score: <span id="final-score" class="font-extrabold text-yellow-400">0</span></p>
+                <div class="motivational-quote"><p id="quote-text"></p></div>
+                <div class="mt-8">
+                    <p class="font-bold mb-2">Share Your Results!</p>
+                    <div class="flex justify-center gap-4">
+                        <button id="share-twitter-btn" class="share-btn bg-[#1DA1F2]">T</button>
+                        <button id="share-whatsapp-btn" class="share-btn bg-[#25D366]">W</button>
+                        <button id="share-copy-btn" class="share-btn bg-slate-500">C</button>
+                    </div>
+                </div>
+                <button id="review-mistakes-btn" class="hidden game-btn game-btn-yellow mt-6">Review My Mistakes</button>
+                <button id="restart-btn" class="game-btn game-btn-start mt-4">Play Again</button>
+            </div>
+        </main>
+
+        <!-- Tab Bar -->
+        <nav id="tab-bar" class="grid grid-cols-2 items-center text-center p-2 gap-2">
+            <button data-target="start-screen" class="tab-btn active">
+                <svg class="mx-auto" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"/></svg>
+                <span>Home</span>
+            </button>
+            <button data-target="profile-screen" class="tab-btn">
+                <svg class="mx-auto" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                <span>Profile</span>
+            </button>
+        </nav>
     </div>
 
-    <div class="relative w-full max-w-lg mx-auto p-4">
-
-        <!-- Start Screen -->
-        <div id="start-screen" class="screen text-center">
-            <div class="flex justify-between items-center w-full mb-4">
-                <span class="text-lg font-bold">Hello, <span id="player-name">Player</span>!</span>
-                <div class="flex items-center">
-                    <button id="auth-btn" class="theme-toggle mr-2">👤</button>
-                    <button id="open-settings-btn" class="theme-toggle">⚙️</button>
-                </div>
+    <!-- NEW: Authentication Screen -->
+    <div id="auth-screen" class="w-full max-w-sm mx-auto p-4 flex flex-col justify-center min-h-screen">
+        <h1 class="text-4xl font-black mb-1 text-center">Medical Trivia</h1>
+        
+        <!-- Login Form -->
+        <div id="login-form" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4">Login</h2>
+            <div class="space-y-4">
+                <input type="email" id="login-email" placeholder="Email" class="game-select w-full">
+                <input type="password" id="login-password" placeholder="Password" class="game-select w-full">
             </div>
-            <img id="mascot" src="assets/images/mascot.png" alt="Quiz Mascot" class="w-40 h-40 mx-auto mb-2 mascot"/>
-            <h1 class="text-4xl font-black mb-1">Medical Faculty Trivia</h1>
-            <p class="text-slate-300 text-lg mb-6">Ready for a challenge?</p>
-            <div class="game-card p-4 mb-6">
-                <div class="flex justify-around items-center">
-                    <div class="text-center"><div class="text-3xl font-black" id="streak-counter">0</div><div class="text-sm text-slate-300">Day Streak</div></div>
-                    <div class="w-px h-12 divider"></div>
-                    <div class="text-center"><div class="text-3xl font-black" id="achievements-unlocked">0/5</div><div class="text-sm text-slate-300">Achievements</div></div>
-                </div>
-            </div>
-            <div class="grid grid-cols-1 gap-4 w-full max-w-md mx-auto">
-                <button id="daily-challenge-btn" class="game-btn game-btn-yellow">★ Daily Challenge</button>
-                <button id="start-bookmarked-btn" class="game-btn game-btn-purple">📚 My Bookmarks</button>
-                <hr class="my-4 divider"/>
-                <div class="game-card p-6 space-y-5">
-                    <div class="w-full text-left">
-                        <label for="year-select" class="text-sm font-bold text-slate-300 mb-1">Year</label>
-                        <select id="year-select" class="game-select"></select>
-                    </div>
-                    <div class="w-full text-left">
-                        <label for="module-select" class="text-sm font-bold text-slate-300 mb-1">Module</label>
-                        <select id="module-select" disabled class="game-select"></select>
-                    </div>
-                    <div class="w-full text-left">
-                        <label for="topic-select" class="text-sm font-bold text-slate-300 mb-1">Topic</label>
-                        <select id="topic-select" disabled class="game-select"></select>
-                    </div>
-                    <div class="w-full text-left">
-                        <label for="question-count-select" class="text-sm font-bold text-slate-300 mb-1">Questions</label>
-                        <select id="question-count-select" class="game-select">
-                            <option value="5">5</option>
-                            <option value="10" selected>10</option>
-                            <option value="20">20</option>
-                            <option value="all">All</option>
-                        </select>
-                    </div>
-                    <div class="w-full text-left">
-                        <label for="timer-mode-select" class="text-sm font-bold text-slate-300 mb-1">Timer Mode</label>
-                        <select id="timer-mode-select" class="game-select">
-                            <option value="timed" selected>With Timer</option>
-                            <option value="untimed">No Timer</option>
-                        </select>
-                    </div>
-                </div>
-                <button id="start-btn" disabled class="game-btn game-btn-start mt-4">Start Topic Quiz</button>
-            </div>
+            <button id="login-btn" class="game-btn game-btn-start w-full mt-6">Login</button>
+            <p class="text-center text-sm mt-4">
+                No account? <a href="#" id="show-signup" class="font-bold text-yellow-300 hover:underline">Sign up</a>
+            </p>
         </div>
 
-        <!-- Quiz Screen -->
-        <div id="quiz-screen" class="screen hidden">
-             <div class="flex justify-between items-center mb-4 gap-4">
-                <p class="text-lg flex-shrink-0">Score: <span id="score" class="font-extrabold">0</span></p>
-                <div class="w-full bg-blue-800 rounded-full h-4 progress-bar-bg"><div id="progress-bar" class="h-4 rounded-full"></div></div>
-                <div id="timer-container" class="timer-display"><span id="timer">20</span></div>
+        <!-- Signup Form (hidden by default) -->
+        <div id="signup-form" class="mt-8 hidden">
+             <h2 class="text-2xl font-bold mb-4">Create Account</h2>
+            <div class="space-y-4">
+                <input type="text" id="signup-name" placeholder="Your Name" class="game-select w-full">
+                <input type="email" id="signup-email" placeholder="Email" class="game-select w-full">
+                <input type="password" id="signup-password" placeholder="Password" class="game-select w-full">
             </div>
-            <!-- Skeleton Loader -->
-            <div id="skeleton-loader" class="game-card p-6 relative">
-                <div class="skeleton w-3/4 h-8 mx-auto mb-8"></div>
-                <div class="grid grid-cols-1 gap-4">
-                    <div class="skeleton w-full h-16 rounded-full"></div>
-                    <div class="skeleton w-full h-16 rounded-full"></div>
-                    <div class="skeleton w-full h-16 rounded-full"></div>
-                </div>
-            </div>
-            <!-- Actual Question Content (Initially Hidden) -->
-            <div id="question-content" class="game-card p-6 relative hidden">
-                <button id="bookmark-btn" aria-label="Bookmark this question" class="bookmark-btn">★</button>
-                <img id="question-image" src="" alt="Question-related image" class="hidden max-h-60 w-auto mx-auto mb-4 rounded-lg bg-slate-700"/>
-                <h2 id="question-text" class="text-2xl font-extrabold mb-6 text-center">Loading...</h2>
-                <div id="choices-container" class="grid grid-cols-1 gap-4"></div>
-                <div id="explanation-box" class="hidden mt-6 p-4 rounded-lg explanation-bg"><p id="explanation-text"></p></div>
-            </div>
-            <div class="text-center mt-6"><button id="next-btn" class="hidden game-btn game-btn-start">Next</button></div>
-        </div>
-
-        <!-- End Screen -->
-        <div id="end-screen" class="screen hidden text-center">
-            <h2 class="text-5xl font-black mb-4">Quiz Finished!</h2>
-            <p class="text-2xl mb-8">Final Score: <span id="final-score" class="font-extrabold text-yellow-400">0</span></p>
-            <div class="motivational-quote"><p id="quote-text"></p></div>
-            <!-- Share Buttons -->
-            <div class="mt-8">
-                <p class="font-bold mb-2">Share Your Results!</p>
-                <div class="flex justify-center gap-4">
-                    <button id="share-twitter-btn" class="share-btn bg-[#1DA1F2]">T</button>
-                    <button id="share-whatsapp-btn" class="share-btn bg-[#25D366]">W</button>
-                    <button id="share-copy-btn" class="share-btn bg-slate-500">C</button>
-                </div>
-            </div>
-            <button id="review-mistakes-btn" class="hidden game-btn game-btn-yellow mt-6">Review My Mistakes</button>
-            <button id="restart-btn" class="game-btn game-btn-start mt-4">Play Again</button>
+            <button id="signup-btn" class="game-btn game-btn-start w-full mt-6">Sign Up</button>
+            <p class="text-center text-sm mt-4">
+                Already have an account? <a href="#" id="show-login" class="font-bold text-yellow-300 hover:underline">Login</a>
+            </p>
         </div>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.js"></script>
     <script src="supabase-client.js"></script>
     <script src="script.js"></script>
-    <script src="auth.js"></script>
 </body>
 </html>
