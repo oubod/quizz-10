@@ -953,8 +953,6 @@ async function startBattle() {
         payload: { message: 'The game is starting!' }
     });
 
-    // The host also calls the function directly
-    startBattleRound();
 }
 
 // Add this event listener with proper error checking
