@@ -226,43 +226,8 @@ async function fetchAndDisplayLobbyPlayers(sessionId, hostId) {
 }
 async function createBattle() {
     playSound('click');
-
-    // ---- NEW CODE START ----
-    if (!questionsReady) {
-        showToast('Questions are still loading, please wait a moment.', true);
-        return;
-    }
-    // ---- NEW CODE END ----
-
-    showToast('Creating a new battle room...');
-
-    // 1. Get 5 random questions for the battle
-    const battleQuestions = [...masterQuestionList].sort(() => 0.5 - Math.random()).slice(0, 5);
-    if (battleQuestions.length < 5) {
-        showToast('Not enough questions for a battle!', true);
-        return;
-    }
-
-    // 2. Create the game session in the database
-    const { data: session, error } = await db.from('game_sessions')
-        .insert({
-            questions: battleQuestions.map(q => q.id), // Store the array of question IDs
-            host_id: playerData.id
-        })
-        .select()
-        .single();
-    
-    if (error) {
-        showToast('Error creating battle. Please try again.', true);
-        console.error(error);
-        return;
-    }
-
-    // 3. The host automatically joins their own session
-    await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
-
-    // 4. Navigate to the lobby and start listening for events
-    navigateToLobby(session.id);
+    showScreen('battle-settings-screen');
+    populateBattleYears();
 }
 
 // --- Replace the old startBattleRound function with this one ---
@@ -322,13 +287,9 @@ async function handleBattleAnswer(selectedChoice, correctAnswer) {
         playSound('incorrect');
     }
 
-    // Update your own score and log that you've answered the current round
+    // Update your own score in the database
     await db.from('session_participants')
-      .update({
-          score: currentScore,
-          // Get the current question index from the database to ensure it's correct
-          answered_index: (await db.from('game_sessions').select('current_question_index').eq('id', currentSessionId).single()).data.current_question_index
-      })
+      .update({ score: currentScore })
       .match({ session_id: currentSessionId, player_id: playerData.id });
 
     // Announce to everyone that you have answered and what your new score is
@@ -341,39 +302,8 @@ async function handleBattleAnswer(selectedChoice, correctAnswer) {
         }
     });
 
-    // The host is responsible for checking if it's time to move to the next round
-    const { data: sessionData, error } = await db.from('game_sessions').select('host_id').eq('id', currentSessionId).single();
-    if (sessionData && sessionData.host_id === playerData.id) {
-        await checkNextRound();
-    }
-}
-
-function updateBattleScoreboard() {
-    const scoreboardEl = document.getElementById('battle-scoreboard');
-    scoreboardEl.innerHTML = '';
-
-    for (const id in battleParticipants) {
-        const player = battleParticipants[id];
-        const scoreDiv = document.createElement('div');
-        scoreDiv.className = 'text-center';
-        scoreDiv.innerHTML = `<div class="font-bold text-lg">${player.username}</div><div>${player.score}</div>`;
-        scoreboardEl.appendChild(scoreDiv);
-    }
-}
-
-async function checkNextRound() {
-    // 1. Get the current question index for the session
-    const { data: session, error: sessionError } = await db.from('game_sessions').select('current_question_index').eq('id', currentSessionId).single();
-    if (sessionError) return;
-    const currentQuestionIndex = session.current_question_index;
-
-    // 2. Get all participants and check if they've all answered this index
-    const { data: participants, error: pError } = await db.from('session_participants').select('answered_index').eq('session_id', currentSessionId);
-    if (pError) return;
-
-    const allAnswered = participants.every(p => p.answered_index === currentQuestionIndex);
-
-    if (allAnswered) {
+    // If the host answers, move to the next round
+    if (battleParticipants[playerData.id]?.isHost) {
         // Use an RPC call to safely increment the question index and get the new value
         const { data, error } = await db.rpc('increment_question_index', { session_id_arg: currentSessionId });
 
@@ -392,6 +322,20 @@ async function checkNextRound() {
         }
     }
 }
+
+function updateBattleScoreboard() {
+    const scoreboardEl = document.getElementById('battle-scoreboard');
+    scoreboardEl.innerHTML = '';
+
+    for (const id in battleParticipants) {
+        const player = battleParticipants[id];
+        const scoreDiv = document.createElement('div');
+        scoreDiv.className = 'text-center';
+        scoreDiv.innerHTML = `<div class="font-bold text-lg">${player.username}</div><div>${player.score}</div>`;
+        scoreboardEl.appendChild(scoreDiv);
+    }
+}
+
 
 async function navigateToLobby(sessionId) {
     currentSessionId = sessionId;
@@ -450,19 +394,6 @@ async function navigateToLobby(sessionId) {
         .on('broadcast', { event: 'game_over' }, () => {
             // Everyone sees the final results
             showBattleResults();
-        })
-        .on('broadcast', { event: 'player_answered' }, (payload) => {
-            // Update the local scoreboard for everyone
-            const { playerId, newScore } = payload.payload;
-            if (battleParticipants[playerId]) {
-                battleParticipants[playerId].score = newScore;
-                updateBattleScoreboard();
-            }
-            // The host checks if it's time to advance
-            const hostId = Object.keys(battleParticipants).find(id => battleParticipants[id].isHost);
-            if (playerData.id === hostId) {
-                checkNextRound();
-            }
         })
         .subscribe();
 
@@ -1033,6 +964,85 @@ if (createBattleBtn) {
 
 // Initialize non-user-specific parts of the app
 initializeApp();
+
+const battleYearSelect = document.getElementById('battle-year-select');
+const battleModuleSelect = document.getElementById('battle-module-select');
+const battleTopicSelect = document.getElementById('battle-topic-select');
+const confirmBattleSettingsBtn = document.getElementById('confirm-battle-settings-btn');
+
+function populateBattleYears() {
+    battleYearSelect.innerHTML = '<option value="">Select Year...</option>';
+    Object.keys(quizStructure).forEach(year => battleYearSelect.add(new Option(year, year)));
+    populateBattleModules('');
+}
+
+function populateBattleModules(selectedYear) {
+    battleModuleSelect.innerHTML = '<option value="">Select Module...</option>';
+    battleModuleSelect.disabled = true;
+    if (selectedYear && quizStructure[selectedYear]) {
+        Object.keys(quizStructure[selectedYear]).forEach(module => battleModuleSelect.add(new Option(module, module)));
+        battleModuleSelect.disabled = false;
+    }
+    populateBattleTopics('', '');
+}
+
+function populateBattleTopics(selectedYear, selectedModule) {
+    battleTopicSelect.innerHTML = '<option value="">Select Topic...</option>';
+    battleTopicSelect.disabled = true;
+    confirmBattleSettingsBtn.disabled = true;
+    if (selectedYear && selectedModule && quizStructure[selectedYear][selectedModule]) {
+        Object.keys(quizStructure[selectedYear][selectedModule]).forEach(topic => battleTopicSelect.add(new Option(topic, topic)));
+        battleTopicSelect.disabled = false;
+    }
+}
+
+battleYearSelect.addEventListener('change', () => populateBattleModules(battleYearSelect.value));
+battleModuleSelect.addEventListener('change', () => populateBattleTopics(battleYearSelect.value, battleModuleSelect.value));
+battleTopicSelect.addEventListener('change', () => { confirmBattleSettingsBtn.disabled = !battleTopicSelect.value; });
+
+confirmBattleSettingsBtn.addEventListener('click', async () => {
+    const filePath = quizStructure[battleYearSelect.value]?.[battleModuleSelect.value]?.[battleTopicSelect.value];
+    if (!filePath) return;
+
+    const questionCount = document.getElementById('battle-question-count-select').value;
+    const timerMode = document.getElementById('battle-timer-mode-select').value;
+
+    try {
+        const response = await fetch(filePath);
+        let questionsForTopic = await response.json();
+        const battleQuestions = questionsForTopic.sort(() => 0.5 - Math.random()).slice(0, parseInt(questionCount, 10));
+
+        if (battleQuestions.length < parseInt(questionCount, 10)) {
+            showToast(`Not enough questions for this topic. Only ${battleQuestions.length} available.`, true);
+            return;
+        }
+
+        const { data: session, error } = await db.from('game_sessions')
+            .insert({
+                questions: battleQuestions.map(q => q.id),
+                host_id: playerData.id,
+                settings: {
+                    question_count: questionCount,
+                    timer_mode: timerMode,
+                    topic: battleTopicSelect.value
+                }
+            })
+            .select()
+            .single();
+
+        if (error) {
+            showToast('Error creating battle. Please try again.', true);
+            console.error(error);
+            return;
+        }
+
+        await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
+        navigateToLobby(session.id);
+
+    } catch (e) {
+        alert('Could not load this topic.');
+    }
+});
 
 // Add this function to handle the start battle button click
 async function startBattle() {
