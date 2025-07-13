@@ -945,24 +945,31 @@ if (createBattleBtn) {
 // Initialize non-user-specific parts of the app
 initializeApp();
 
-// --- Place this at the bottom of script.js with other listeners ---
+// Add this function to handle the start battle button click
+async function startBattle() {
+    playSound('click');
+    
+    if (!currentSessionId) {
+        showToast('Error: No active battle session.', true);
+        return;
+    }
+    
+    // Update the session status to 'active' in the database
+    const { error } = await db.from('game_sessions')
+        .update({ status: 'active' })
+        .eq('id', currentSessionId);
+
+    if (error) {
+        showToast('Error starting battle. Please try again.', true);
+        console.error(error);
+        return;
+    }
+    
+    showToast('Battle started! Good luck!');
+}
+
+// Add this event listener with proper error checking
 const startBattleBtn = document.getElementById('start-battle-btn');
-
 if (startBattleBtn) {
-    startBattleBtn.addEventListener('click', async () => {
-        if (!currentSessionId) return;
-
-        // The host's only job is to update the game status in the database.
-        const { error } = await db.from('game_sessions')
-            .update({ status: 'active' })
-            .eq('id', currentSessionId);
-
-        if (error) {
-            showToast('Could not start the game.', true);
-            console.error('Error starting game:', error);
-        } else {
-            showToast('Starting battle!');
-            // The database subscription will handle starting the game for all players
-        }
-    });
+    startBattleBtn.addEventListener('click', startBattle);
 }
