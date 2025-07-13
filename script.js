@@ -1037,7 +1037,13 @@ confirmBattleSettingsBtn.addEventListener('click', async () => {
         if (!response.ok) throw new Error("Could not load questions for the selected topic.");
 
         let questionsForTopic = await response.json();
-        const battleQuestions = questionsForTopic.sort(() => 0.5 - Math.random()).slice(0, parseInt(questionCount, 10));
+
+        // --- FIX: Ensure battle questions have the master ID ---
+        const topicQuestionsFromMaster = masterQuestionList.filter(q =>
+            questionsForTopic.some(tq => tq.question === q.question)
+        );
+
+        const battleQuestions = topicQuestionsFromMaster.sort(() => 0.5 - Math.random()).slice(0, parseInt(questionCount, 10));
 
         if (battleQuestions.length < parseInt(questionCount, 10)) {
             throw new Error(`Not enough questions available. Only found ${battleQuestions.length}.`);
