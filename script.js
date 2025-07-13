@@ -1,4 +1,3 @@
-
 // --- DOM Elements ---
 
 // NEW: Real-time Battle State
@@ -961,7 +960,9 @@ if (startBattleBtn) {
         if (error) {
             showToast('Could not start the game.', true);
             console.error('Error starting game:', error);
+        } else {
+            showToast('Starting battle!');
+            // The database subscription will handle starting the game for all players
         }
-        // No broadcast needed. The database will do the work.
     });
 }
