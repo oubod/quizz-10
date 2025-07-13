@@ -238,6 +238,12 @@ async function createBattle() {
 // --- Replace the old startBattleRound function with this one ---
 async function startBattleRound() {
     try {
+        if (!questionsReady) {
+            showToast("Questions are still loading, please wait a moment.", true);
+            setTimeout(startBattleRound, 1000); // Retry after a second
+            return;
+        }
+
         showScreen('battle-quiz-screen');
 
         const { data: session, error } = await db.from('game_sessions')
