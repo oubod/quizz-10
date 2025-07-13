@@ -322,17 +322,30 @@ async function handleBattleAnswer(selectedChoice, correctAnswer) {
         playSound('incorrect');
     }
 
-    // Update your own score in the database
+    // Update your own score and log that you've answered the current round
     await db.from('session_participants')
-      .update({ score: currentScore, answers: { /* you could log the answer here */ } })
+      .update({
+          score: currentScore,
+          // Get the current question index from the database to ensure it's correct
+          answered_index: (await db.from('game_sessions').select('current_question_index').eq('id', currentSessionId).single()).data.current_question_index
+      })
       .match({ session_id: currentSessionId, player_id: playerData.id });
 
     // Announce to everyone that you have answered and what your new score is
     await battleChannel.send({
         type: 'broadcast',
         event: 'player_answered',
-        payload: { playerId: playerData.id, newScore: currentScore }
+        payload: {
+            playerId: playerData.id,
+            newScore: currentScore
+        }
     });
+
+    // The host is responsible for checking if it's time to move to the next round
+    const { data: sessionData, error } = await db.from('game_sessions').select('host_id').eq('id', currentSessionId).single();
+    if (sessionData && sessionData.host_id === playerData.id) {
+        await checkNextRound();
+    }
 }
 
 function updateBattleScoreboard() {
@@ -345,6 +358,38 @@ function updateBattleScoreboard() {
         scoreDiv.className = 'text-center';
         scoreDiv.innerHTML = `<div class="font-bold text-lg">${player.username}</div><div>${player.score}</div>`;
         scoreboardEl.appendChild(scoreDiv);
+    }
+}
+
+async function checkNextRound() {
+    // 1. Get the current question index for the session
+    const { data: session, error: sessionError } = await db.from('game_sessions').select('current_question_index').eq('id', currentSessionId).single();
+    if (sessionError) return;
+    const currentQuestionIndex = session.current_question_index;
+
+    // 2. Get all participants and check if they've all answered this index
+    const { data: participants, error: pError } = await db.from('session_participants').select('answered_index').eq('session_id', currentSessionId);
+    if (pError) return;
+
+    const allAnswered = participants.every(p => p.answered_index === currentQuestionIndex);
+
+    if (allAnswered) {
+        // Use an RPC call to safely increment the question index and get the new value
+        const { data, error } = await db.rpc('increment_question_index', { session_id_arg: currentSessionId });
+
+        if (error) {
+            console.error("Could not increment question index:", error);
+            return;
+        }
+
+        // Check if the game is over
+        if (data.is_game_over) {
+            // Send a broadcast that the game has ended
+            await battleChannel.send({ type: 'broadcast', event: 'game_over' });
+        } else {
+            // Otherwise, tell everyone to start the next round
+            await battleChannel.send({ type: 'broadcast', event: 'next_round' });
+        }
     }
 }
 
@@ -398,6 +443,27 @@ async function navigateToLobby(sessionId) {
             // Everyone (including the host) will receive this and start the game
             startBattleRound();
         })
+        .on('broadcast', { event: 'next_round' }, () => {
+            // Everyone starts the next round
+            startBattleRound();
+        })
+        .on('broadcast', { event: 'game_over' }, () => {
+            // Everyone sees the final results
+            showBattleResults();
+        })
+        .on('broadcast', { event: 'player_answered' }, (payload) => {
+            // Update the local scoreboard for everyone
+            const { playerId, newScore } = payload.payload;
+            if (battleParticipants[playerId]) {
+                battleParticipants[playerId].score = newScore;
+                updateBattleScoreboard();
+            }
+            // The host checks if it's time to advance
+            const hostId = Object.keys(battleParticipants).find(id => battleParticipants[id].isHost);
+            if (playerData.id === hostId) {
+                checkNextRound();
+            }
+        })
         .subscribe();
 
     // Initial fetch to show who is already in the lobby
@@ -408,20 +474,51 @@ function updateLobbyUI(hostId) {
     const playerListEl = document.getElementById('lobby-player-list');
     playerListEl.innerHTML = '';
     
-    Object.values(battleParticipants).forEach(player => {
+    Object.keys(battleParticipants).forEach(id => {
+        const player = battleParticipants[id];
+        player.isHost = (id === hostId); // Set a flag on the participant object
         const li = document.createElement('li');
-        li.textContent = `✅ ${player.username}`;
+        li.textContent = `✅ ${player.username} ${player.isHost ? '(Host)' : ''}`;
         playerListEl.appendChild(li);
     });
 
-    // ---- THIS IS THE KEY CHANGE ----
-    // Check if the current player's ID matches the fetched hostId
-    if (playerData.id === hostId) { 
+    // Check if the current player is the host
+    if (battleParticipants[playerData.id]?.isHost) {
         document.getElementById('host-controls').classList.remove('hidden');
         document.getElementById('guest-message').classList.add('hidden');
     } else {
         document.getElementById('host-controls').classList.add('hidden');
         document.getElementById('guest-message').classList.remove('hidden');
+    }
+}
+
+async function showBattleResults() {
+    // Fetch final scores
+    const { data, error } = await db.from('session_participants')
+        .select('score, profiles(username)')
+        .eq('session_id', currentSessionId)
+        .order('score', { ascending: false });
+
+    if (error) {
+        showToast('Error fetching final results.', true);
+        return;
+    }
+
+    const resultsEl = document.getElementById('battle-final-results');
+    resultsEl.innerHTML = '';
+    data.forEach((p, index) => {
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'p-4 rounded-lg bg-slate-700';
+        resultDiv.innerHTML = `<h3 class="text-xl font-bold">${index + 1}. ${p.profiles.username}</h3><p>Score: ${p.score}</p>`;
+        resultsEl.appendChild(resultDiv);
+    });
+
+    showScreen('battle-end-screen');
+
+    // Clean up the battle channel
+    if (battleChannel) {
+        db.removeChannel(battleChannel);
+        battleChannel = null;
     }
 }
 
@@ -960,3 +1057,31 @@ const startBattleBtn = document.getElementById('start-battle-btn');
 if (startBattleBtn) {
     startBattleBtn.addEventListener('click', startBattle);
 }
+
+const battleBackToHomeBtn = document.getElementById('battle-back-to-home-btn');
+if (battleBackToHomeBtn) {
+    battleBackToHomeBtn.addEventListener('click', () => showScreen('start-screen'));
+}
+
+// --- State Preservation ---
+function saveState() {
+    const state = {
+        currentScreen: appContent.querySelector('.screen:not(.hidden)')?.id,
+        // Add other relevant state variables here
+    };
+    sessionStorage.setItem('appState', JSON.stringify(state));
+}
+
+function restoreState() {
+    const savedState = sessionStorage.getItem('appState');
+    if (savedState) {
+        const state = JSON.parse(savedState);
+        if (state.currentScreen) {
+            showScreen(state.currentScreen);
+        }
+        // Restore other state variables here
+    }
+}
+
+window.addEventListener('beforeunload', saveState);
+window.addEventListener('DOMContentLoaded', restoreState);
