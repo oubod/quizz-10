@@ -192,6 +192,39 @@ let questionsReady = false;
 
 
 // --- Battle Functions ---
+// --- Add this NEW function anywhere in script.js ---
+async function fetchAndDisplayLobbyPlayers(sessionId, hostId) {
+    // Fetch all participants for this session
+    const { data: participants, error } = await db.from('session_participants')
+        .select(`
+            profiles ( id, username )
+        `)
+        .eq('session_id', sessionId);
+    
+    if (error) {
+        console.error("Could not fetch lobby players:", error);
+        return;
+    }
+
+    // Clear and re-populate the list
+    const playerListEl = document.getElementById('lobby-player-list');
+    playerListEl.innerHTML = '';
+    battleParticipants = {}; // Reset local state
+
+    (participants || []).forEach(p => {
+        if (p.profiles) {
+            const profile = p.profiles;
+            battleParticipants[profile.id] = { username: profile.username, score: 0 };
+            
+            const li = document.createElement('li');
+            li.textContent = `✅ ${profile.username}`;
+            playerListEl.appendChild(li);
+        }
+    });
+    
+    // Now, update the host controls based on the fetched data
+    updateLobbyUI(hostId);
+}
 async function createBattle() {
     playSound('click');
 
@@ -338,59 +371,46 @@ async function navigateToLobby(sessionId) {
         navigator.clipboard.writeText(inviteLink).then(() => showToast('Invite link copied!'));
     };
 
-    // Unsubscribe from any old channel first to prevent duplicate listeners
+    // Unsubscribe from any old channel to prevent memory leaks
     if (battleChannel) {
-        battleChannel.unsubscribe();
+        db.removeChannel(battleChannel);
     }
 
-    // Create a unique Supabase channel for this battle
-    battleChannel = db.channel(`battle-${sessionId}`);
-
-    // Set up all our event listeners for this battle
-    battleChannel
-        .on('broadcast', { event: 'player_joined' }, (payload) => {
-            console.log('Event: player_joined', payload);
-            const profile = payload.payload.profile;
-            if (profile) {
-                battleParticipants[profile.id] = { username: profile.username, score: 0 };
-                updateLobbyUI(sessionData.host_id); // Pass the host ID here
+    // Listen for INSERTS to session_participants (when a player joins)
+    battleChannel = db.channel(`battle-lobby-${sessionId}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'session_participants',
+                filter: `session_id=eq.${sessionId}`
+            },
+            // When a new participant is inserted, refetch the list.
+            () => fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id)
+        )
+        // ALSO listen for UPDATES to game_sessions (when the game starts)
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'game_sessions',
+                filter: `id=eq.${sessionId}`
+            },
+            (payload) => {
+                // Check if the 'status' column was the one that changed to 'active'
+                if (payload.new.status === 'active' && payload.old.status === 'waiting') {
+                    console.log('Game status changed to active! Starting round 1.');
+                    // Everyone, host and guest, starts the first round independently.
+                    startBattleRound(0);
+                }
             }
-        })
-        .on('broadcast', { event: 'game_start' }, (payload) => {
-            console.log('Event: game_start');
-            startBattleRound(payload.questionIndex);
-        })
-        .on('broadcast', { event: 'player_answered' }, (payload) => {
-            console.log('Event: player_answered', payload);
-            if(battleParticipants[payload.playerId]) {
-                battleParticipants[payload.playerId].score = payload.newScore;
-            }
-            // Optional: Update the UI to show the player has answered
-        })
-        .on('broadcast', { event: 'round_over' }, (payload) => {
-            console.log('Event: round_over');
-            updateBattleScoreboard();
-            document.getElementById('battle-timer-overlay').classList.remove('hidden');
-        })
-        .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                const { data: { user } } = await db.auth.getUser();
-                const { data: profile } = await db.from('profiles').select('id, username').eq('id', user.id).single();
-                await battleChannel.send({
-                    type: 'broadcast',
-                    event: 'player_joined',
-                    payload: { profile },
-                });
-            }
-        });
+        )
+        .subscribe();
 
-    // The "Start Battle" button is only for the host
-    document.getElementById('start-battle-btn').onclick = () => {
-        battleChannel.send({ type: 'broadcast', event: 'game_start', payload: { questionIndex: 0 } });
-    };
-
-    // Initial UI update with host_id
-    updateLobbyUI(sessionData.host_id);
+    // Initial fetch to show who is already in the lobby
+    fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id);
 }
 
 function updateLobbyUI(hostId) {
@@ -925,3 +945,23 @@ if (createBattleBtn) {
 
 // Initialize non-user-specific parts of the app
 initializeApp();
+
+// --- Place this at the bottom of script.js with other listeners ---
+const startBattleBtn = document.getElementById('start-battle-btn');
+
+if (startBattleBtn) {
+    startBattleBtn.addEventListener('click', async () => {
+        if (!currentSessionId) return;
+
+        // The host's only job is to update the game status in the database.
+        const { error } = await db.from('game_sessions')
+            .update({ status: 'active' })
+            .eq('id', currentSessionId);
+
+        if (error) {
+            showToast('Could not start the game.', true);
+            console.error('Error starting game:', error);
+        }
+        // No broadcast needed. The database will do the work.
+    });
+}
