@@ -225,101 +225,117 @@ async function fetchAndDisplayLobbyPlayers(sessionId, hostId) {
     updateLobbyUI(hostId);
 }
 async function createBattle() {
-    playSound('click');
-    showScreen('battle-settings-screen');
-    populateBattleYears();
+    try {
+        playSound('click');
+        showScreen('battle-settings-screen');
+        populateBattleYears();
+    } catch (error) {
+        console.error("Error in createBattle:", error);
+        showToast("An unexpected error occurred while starting a battle.", true);
+    }
 }
 
 // --- Replace the old startBattleRound function with this one ---
 async function startBattleRound() {
-    showScreen('battle-quiz-screen');
-    document.getElementById('battle-timer-overlay').classList.add('hidden');
+    try {
+        showScreen('battle-quiz-screen');
 
-    // Fetch the ENTIRE game session, including its current question index
-    const { data: sessionData, error } = await db.from('game_sessions')
-        .select('questions, current_question_index')
-        .eq('id', currentSessionId)
-        .single();
+        const { data: session, error } = await db.from('game_sessions')
+            .select('*, session_participants(count)')
+            .eq('id', currentSessionId)
+            .single();
 
-    if (error || !sessionData) {
-        showToast('Error loading battle data!', true);
-        return;
-    }
-
-    // Get the ID of the question for the current round
-    const questionId = sessionData.questions[sessionData.current_question_index];
-
-    // Find the full question object from our master list using its ID
-    const question = masterQuestionList.find(q => q.id === questionId);
-
-    if (!question) {
-        showToast('Error finding question details!', true);
-        console.error(`Could not find question with ID: ${questionId}`);
-        // Go back to the home screen if the battle is broken
-        showScreen('start-screen');
-        return;
-    }
-
-    // Display the question
-    document.getElementById('battle-question-text').textContent = question.question;
-    const choicesContainer = document.getElementById('battle-choices-container');
-    choicesContainer.innerHTML = '';
-    question.choices.forEach(choice => {
-        const button = document.createElement('button');
-        button.textContent = choice;
-        button.className = 'game-btn';
-        button.onclick = () => handleBattleAnswer(choice, question.answer);
-        choicesContainer.appendChild(button);
-    });
-
-    updateBattleScoreboard();
-}
-
-async function handleBattleAnswer(selectedChoice, correctAnswer) {
-    // Disable all choice buttons immediately
-    document.querySelectorAll('#battle-choices-container button').forEach(b => b.disabled = true);
-    
-    let currentScore = battleParticipants[playerData.id].score || 0;
-    if (selectedChoice === correctAnswer) {
-        currentScore += 100; // Simple scoring
-        playSound('correct');
-    } else {
-        playSound('incorrect');
-    }
-
-    // Update your own score in the database
-    await db.from('session_participants')
-      .update({ score: currentScore })
-      .match({ session_id: currentSessionId, player_id: playerData.id });
-
-    // Announce to everyone that you have answered and what your new score is
-    await battleChannel.send({
-        type: 'broadcast',
-        event: 'player_answered',
-        payload: {
-            playerId: playerData.id,
-            newScore: currentScore
+        if (error || !session) {
+            throw new Error(error?.message || 'Could not fetch battle session.');
         }
-    });
 
-    // If the host answers, move to the next round
-    if (battleParticipants[playerData.id]?.isHost) {
-        // Use an RPC call to safely increment the question index and get the new value
-        const { data, error } = await db.rpc('increment_question_index', { session_id_arg: currentSessionId });
-
-        if (error) {
-            console.error("Could not increment question index:", error);
+        if (session.status === 'finished') {
+            showBattleResults();
             return;
         }
 
-        // Check if the game is over
-        if (data.is_game_over) {
-            // Send a broadcast that the game has ended
-            await battleChannel.send({ type: 'broadcast', event: 'game_over' });
-        } else {
-            // Otherwise, tell everyone to start the next round
-            await battleChannel.send({ type: 'broadcast', event: 'next_round' });
+        const questionId = session.questions[session.current_question_index];
+        const question = masterQuestionList.find(q => q.id === questionId);
+
+        if (!question) {
+            throw new Error(`Question with ID ${questionId} not found.`);
         }
+
+        document.getElementById('battle-question-text').textContent = question.question;
+        const choicesContainer = document.getElementById('battle-choices-container');
+        choicesContainer.innerHTML = '';
+        question.choices.forEach(choice => {
+            const button = document.createElement('button');
+            button.textContent = choice;
+            button.className = 'game-btn';
+            button.disabled = false;
+            button.onclick = () => handleBattleAnswer(choice, question.answer);
+            choicesContainer.appendChild(button);
+        });
+
+        updateBattleScoreboard();
+
+        const roundTimerEl = document.getElementById('battle-round-timer');
+        if (window.roundTimerInterval) clearInterval(window.roundTimerInterval);
+
+        const endTime = new Date(session.round_timer).getTime();
+        window.roundTimerInterval = setInterval(async () => {
+            const now = new Date().getTime();
+            const timeLeft = Math.round((endTime - now) / 1000);
+
+            if (timeLeft > 0) {
+                roundTimerEl.textContent = `Time Left: ${timeLeft}s`;
+            } else {
+                roundTimerEl.textContent = "Time's up!";
+                clearInterval(window.roundTimerInterval);
+                if (battleParticipants[playerData.id]?.isHost) {
+                    const { error: rpcError } = await db.rpc('advance_game_state', { session_id_arg: currentSessionId });
+                    if (rpcError) console.error("Error advancing game state on timer expiry:", rpcError);
+                }
+            }
+        }, 1000);
+
+    } catch (error) {
+        console.error("Error in startBattleRound:", error);
+        showToast(error.message || 'Error loading the battle round.', true);
+        showScreen('start-screen');
+    }
+}
+
+async function handleBattleAnswer(selectedChoice, correctAnswer) {
+    try {
+        document.querySelectorAll('#battle-choices-container button').forEach(b => b.disabled = true);
+
+        let currentScore = battleParticipants[playerData.id]?.score || 0;
+        if (selectedChoice === correctAnswer) {
+            currentScore += 100;
+            playSound('correct');
+        } else {
+            playSound('incorrect');
+        }
+
+        const { data: session, error: sessionError } = await db.from('game_sessions').select('current_question_index').eq('id', currentSessionId).single();
+        if (sessionError) throw sessionError;
+
+        const { error: updateError } = await db.from('session_participants')
+            .update({
+                score: currentScore,
+                last_answered_question_index: session.current_question_index
+            })
+            .match({ session_id: currentSessionId, player_id: playerData.id });
+        if (updateError) throw updateError;
+
+        await battleChannel.send({
+            type: 'broadcast',
+            event: 'player_answered',
+            payload: { playerId: playerData.id, newScore: currentScore }
+        });
+
+    } catch (error) {
+        console.error("Error handling battle answer:", error);
+        showToast("Could not submit your answer. Please try again.", true);
+        // Re-enable buttons if the submission failed
+        document.querySelectorAll('#battle-choices-container button').forEach(b => b.disabled = false);
     }
 }
 
@@ -338,67 +354,79 @@ function updateBattleScoreboard() {
 
 
 async function navigateToLobby(sessionId) {
-    currentSessionId = sessionId;
-    battleParticipants = {};
+    try {
+        currentSessionId = sessionId;
+        battleParticipants = {};
 
-    // ---- NEW CODE START ----
-    // Fetch the session details to know who the host is
-    const { data: sessionData, error } = await db.from('game_sessions')
-        .select('host_id')
-        .eq('id', sessionId)
-        .single();
+        const { data: sessionData, error } = await db.from('game_sessions')
+            .select('host_id')
+            .eq('id', sessionId)
+            .single();
 
-    if (error || !sessionData) {
-        showToast('Could not load battle lobby.', true);
-        showScreen('start-screen'); // Go back home if lobby fails
-        return;
+        if (error || !sessionData) {
+            throw new Error(error?.message || 'Could not load battle lobby.');
+        }
+
+        showScreen('battle-lobby-screen');
+
+        const inviteLink = `${window.location.origin}${window.location.pathname}?battle=${sessionId}`;
+        const inviteLinkInput = document.getElementById('invite-link-input');
+        inviteLinkInput.value = inviteLink;
+        document.getElementById('copy-invite-link-btn').onclick = () => {
+            navigator.clipboard.writeText(inviteLink).then(() => showToast('Invite link copied!'));
+        };
+
+        if (battleChannel) {
+            db.removeChannel(battleChannel);
+        }
+
+        battleChannel = db.channel(`battle-lobby-${sessionId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'session_participants', filter: `session_id=eq.${sessionId}` },
+                () => fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id)
+            )
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_sessions', filter: `id=eq.${sessionId}` },
+                (payload) => {
+                    const { new: new_data, old: old_data } = payload;
+                    if (new_data.current_question_index !== old_data.current_question_index) startBattleRound();
+                    if (new_data.status === 'finished') showBattleResults();
+                }
+            )
+            .on('broadcast', { event: 'game_started' }, () => startBattleRound())
+            .on('broadcast', { event: 'player_answered' }, async (payload) => {
+                try {
+                    const { playerId, newScore } = payload.payload;
+                    if (battleParticipants[playerId]) {
+                        battleParticipants[playerId].score = newScore;
+                        updateBattleScoreboard();
+                    }
+                    if (battleParticipants[playerData.id]?.isHost) {
+                        const { data, error } = await db.rpc('get_answered_player_count', { session_id_arg: currentSessionId });
+                        if (error) throw error;
+                        if (data >= Object.keys(battleParticipants).length) {
+                            const { error: rpcError } = await db.rpc('advance_game_state', { session_id_arg: currentSessionId });
+                            if (rpcError) throw rpcError;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error in player_answered broadcast handler:", error);
+                }
+            })
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log(`Successfully subscribed to battle channel: battle-lobby-${sessionId}`);
+                } else if (status === 'CHANNEL_ERROR' || err) {
+                    console.error(`Failed to subscribe to channel`, err);
+                    showToast('Real-time connection error. Please refresh.', true);
+                }
+            });
+
+        await fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id);
+
+    } catch (error) {
+        console.error("Error navigating to lobby:", error);
+        showToast(error.message || 'Could not navigate to the lobby.', true);
+        showScreen('start-screen');
     }
-    // ---- NEW CODE END ----
-
-    showScreen('battle-lobby-screen');
-
-    // Populate the invite link
-    const inviteLink = `${window.location.origin}${window.location.pathname}?battle=${sessionId}`;
-    const inviteLinkInput = document.getElementById('invite-link-input');
-    inviteLinkInput.value = inviteLink;
-    document.getElementById('copy-invite-link-btn').onclick = () => {
-        navigator.clipboard.writeText(inviteLink).then(() => showToast('Invite link copied!'));
-    };
-
-    // Unsubscribe from any old channel to prevent memory leaks
-    if (battleChannel) {
-        db.removeChannel(battleChannel);
-    }
-
-    // Listen for INSERTS to session_participants (when a player joins)
-    battleChannel = db.channel(`battle-lobby-${sessionId}`)
-        .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'session_participants',
-                filter: `session_id=eq.${sessionId}`
-            },
-            // When a new participant is inserted, refetch the list.
-            () => fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id)
-        )
-        .on('broadcast', { event: 'start_game' }, () => {
-            // Everyone (including the host) will receive this and start the game
-            startBattleRound();
-        })
-        .on('broadcast', { event: 'next_round' }, () => {
-            // Everyone starts the next round
-            startBattleRound();
-        })
-        .on('broadcast', { event: 'game_over' }, () => {
-            // Everyone sees the final results
-            showBattleResults();
-        })
-        .subscribe();
-
-    // Initial fetch to show who is already in the lobby
-    fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id);
 }
 
 function updateLobbyUI(hostId) {
@@ -424,32 +452,34 @@ function updateLobbyUI(hostId) {
 }
 
 async function showBattleResults() {
-    // Fetch final scores
-    const { data, error } = await db.from('session_participants')
-        .select('score, profiles(username)')
-        .eq('session_id', currentSessionId)
-        .order('score', { ascending: false });
+    try {
+        const { data, error } = await db.from('session_participants')
+            .select('score, profiles(username)')
+            .eq('session_id', currentSessionId)
+            .order('score', { ascending: false });
 
-    if (error) {
-        showToast('Error fetching final results.', true);
-        return;
-    }
+        if (error) throw error;
 
-    const resultsEl = document.getElementById('battle-final-results');
-    resultsEl.innerHTML = '';
-    data.forEach((p, index) => {
-        const resultDiv = document.createElement('div');
-        resultDiv.className = 'p-4 rounded-lg bg-slate-700';
-        resultDiv.innerHTML = `<h3 class="text-xl font-bold">${index + 1}. ${p.profiles.username}</h3><p>Score: ${p.score}</p>`;
-        resultsEl.appendChild(resultDiv);
-    });
+        const resultsEl = document.getElementById('battle-final-results');
+        resultsEl.innerHTML = '';
+        data.forEach((p, index) => {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'p-4 rounded-lg bg-slate-700';
+            resultDiv.innerHTML = `<h3 class="text-xl font-bold">${index + 1}. ${p.profiles.username}</h3><p>Score: ${p.score}</p>`;
+            resultsEl.appendChild(resultDiv);
+        });
 
-    showScreen('battle-end-screen');
+        showScreen('battle-end-screen');
 
-    // Clean up the battle channel
-    if (battleChannel) {
-        db.removeChannel(battleChannel);
-        battleChannel = null;
+    } catch (error) {
+        console.error("Error showing battle results:", error);
+        showToast("Could not display final scores.", true);
+    } finally {
+        if (battleChannel) {
+            db.removeChannel(battleChannel);
+            battleChannel = null;
+        }
+        currentSessionId = null;
     }
 }
 
@@ -893,10 +923,11 @@ tabBar.addEventListener('click', (e) => {
 // --- Replace the old checkForBattleInvite function with this one ---
 
 async function checkForBattleInvite() {
-    const params = new URLSearchParams(window.location.search);
-    const battleId = params.get('battle');
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const battleId = params.get('battle');
+        if (!battleId) return;
 
-    if (battleId) {
         showToast('Joining battle from invite link...');
         const { data: { user } } = await db.auth.getUser();
         if (!user) {
@@ -904,41 +935,29 @@ async function checkForBattleInvite() {
             return;
         }
 
-        // ---- NEW CODE START ----
-        // Check if this user is ALREADY a participant in this session
         const { data: existingParticipant, error: checkError } = await db.from('session_participants')
             .select('id')
             .match({ session_id: battleId, player_id: user.id })
-            .maybeSingle(); // Use maybeSingle to not error if nothing is found
+            .maybeSingle();
 
-        if (checkError) {
-            showToast('Error checking battle status.', true);
-            console.error(checkError);
-            return;
-        }
+        if (checkError) throw new Error("Error checking battle status.");
 
-        // If the user is NOT already in the game, add them.
         if (!existingParticipant) {
-            const { error: insertError } = await db.from('session_participants')
-                .insert({ session_id: battleId, player_id: user.id });
-
-            if (insertError) {
-                // Handle the case where there might be a race condition
-                if (insertError.code === '23505') { // 23505 is the code for unique_violation
-                    console.warn('Race condition on join, but already a participant. Ignoring.');
-                } else {
-                    showToast('Could not join battle.', true);
-                    console.error('Join battle error:', insertError);
-                    return;
-                }
+            const { error: insertError } = await db.from('session_participants').insert({ session_id: battleId, player_id: user.id });
+            // Ignore unique_violation errors, as they mean the user is already in the session.
+            if (insertError && insertError.code !== '23505') {
+                throw new Error("Could not join battle.");
             }
         }
-        // ---- NEW CODE END ----
 
-        // Whether we just joined or were already here, navigate to the lobby.
-        navigateToLobby(battleId);
+        await navigateToLobby(battleId);
 
-        // Clean the URL so refreshing the page doesn't try to rejoin
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+    } catch (error) {
+        console.error("Error checking for battle invite:", error);
+        showToast(error.message || 'Failed to join the battle.', true);
+        // Clean up the URL even if joining fails
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
@@ -1001,23 +1020,24 @@ battleModuleSelect.addEventListener('change', () => populateBattleTopics(battleY
 battleTopicSelect.addEventListener('change', () => { confirmBattleSettingsBtn.disabled = !battleTopicSelect.value; });
 
 confirmBattleSettingsBtn.addEventListener('click', async () => {
-    const filePath = quizStructure[battleYearSelect.value]?.[battleModuleSelect.value]?.[battleTopicSelect.value];
-    if (!filePath) return;
-
-    const questionCount = document.getElementById('battle-question-count-select').value;
-    const timerMode = document.getElementById('battle-timer-mode-select').value;
-
     try {
+        const filePath = quizStructure[battleYearSelect.value]?.[battleModuleSelect.value]?.[battleTopicSelect.value];
+        if (!filePath) return;
+
+        const questionCount = document.getElementById('battle-question-count-select').value;
+        const timerMode = document.getElementById('battle-timer-mode-select').value;
+
         const response = await fetch(filePath);
+        if (!response.ok) throw new Error("Could not load questions for the selected topic.");
+
         let questionsForTopic = await response.json();
         const battleQuestions = questionsForTopic.sort(() => 0.5 - Math.random()).slice(0, parseInt(questionCount, 10));
 
         if (battleQuestions.length < parseInt(questionCount, 10)) {
-            showToast(`Not enough questions for this topic. Only ${battleQuestions.length} available.`, true);
-            return;
+            throw new Error(`Not enough questions available. Only found ${battleQuestions.length}.`);
         }
 
-        const { data: session, error } = await db.from('game_sessions')
+        const { data: session, error: sessionError } = await db.from('game_sessions')
             .insert({
                 questions: battleQuestions.map(q => q.id),
                 host_id: playerData.id,
@@ -1029,37 +1049,45 @@ confirmBattleSettingsBtn.addEventListener('click', async () => {
             })
             .select()
             .single();
+        if (sessionError) throw sessionError;
 
-        if (error) {
-            showToast('Error creating battle. Please try again.', true);
-            console.error(error);
-            return;
-        }
+        const { error: participantError } = await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
+        if (participantError) throw participantError;
 
-        await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
-        navigateToLobby(session.id);
+        await navigateToLobby(session.id);
 
-    } catch (e) {
-        alert('Could not load this topic.');
+    } catch (error) {
+        console.error("Error confirming battle settings:", error);
+        showToast(error.message || 'Error creating the battle.', true);
     }
 });
 
-// Add this function to handle the start battle button click
+// NEW: This function is triggered by the host clicking the "Start Battle" button.
 async function startBattle() {
     playSound('click');
-    
     if (!currentSessionId || !battleChannel) {
         showToast('Error: No active battle session.', true);
         return;
     }
-    
-    // The host sends a message to start the countdown
-    await battleChannel.send({
-        type: 'broadcast',
-        event: 'start_game',
-        payload: { message: 'The game is starting!' }
+
+    // 1. The host calls an RPC function to officially start the game.
+    // This function will set the initial `round_timer` and `current_question_index`.
+    const { error } = await db.rpc('start_game_session', {
+        session_id_arg: currentSessionId
     });
 
+    if (error) {
+        showToast('Could not start the game. Please try again.', true);
+        console.error('Error starting game:', error);
+        return;
+    }
+
+    // 2. The host then broadcasts a message to all clients that the game has officially begun.
+    // This is separate from the RPC call to ensure clients only react once the server has confirmed the start.
+    await battleChannel.send({
+        type: 'broadcast',
+        event: 'game_started' // Use a more specific event name
+    });
 }
 
 // Add this event listener with proper error checking
