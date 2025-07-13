@@ -266,30 +266,36 @@ async function createBattle() {
 }
 
 // --- Replace the old startBattleRound function with this one ---
-async function startBattleRound(questionIndex) {
+async function startBattleRound() {
     showScreen('battle-quiz-screen');
     document.getElementById('battle-timer-overlay').classList.add('hidden');
 
-    // Get the array of question IDs for this session
-    const { data: sessionData } = await db.from('game_sessions').select('questions').eq('id', currentSessionId).single();
-    if (!sessionData || !sessionData.questions) {
-        showToast('Error: Could not retrieve battle questions.', true);
+    // Fetch the ENTIRE game session, including its current question index
+    const { data: sessionData, error } = await db.from('game_sessions')
+        .select('questions, current_question_index')
+        .eq('id', currentSessionId)
+        .single();
+
+    if (error || !sessionData) {
+        showToast('Error loading battle data!', true);
         return;
     }
 
-    // Get the specific question ID for the current round
-    const questionId = sessionData.questions[questionIndex];
-    
+    // Get the ID of the question for the current round
+    const questionId = sessionData.questions[sessionData.current_question_index];
+
     // Find the full question object from our master list using its ID
     const question = masterQuestionList.find(q => q.id === questionId);
 
     if (!question) {
-        showToast('Error loading question!', true);
+        showToast('Error finding question details!', true);
         console.error(`Could not find question with ID: ${questionId}`);
+        // Go back to the home screen if the battle is broken
+        showScreen('start-screen');
         return;
     }
 
-    // The rest of the function is the same
+    // Display the question
     document.getElementById('battle-question-text').textContent = question.question;
     const choicesContainer = document.getElementById('battle-choices-container');
     choicesContainer.innerHTML = '';
@@ -400,9 +406,8 @@ async function navigateToLobby(sessionId) {
             (payload) => {
                 // Check if the 'status' column was the one that changed to 'active'
                 if (payload.new.status === 'active' && payload.old.status === 'waiting') {
-                    console.log('Game status changed to active! Starting round 1.');
-                    // Everyone, host and guest, starts the first round independently.
-                    startBattleRound(0);
+                    console.log('Game status changed to active!');
+                    startBattleRound(); // <-- REMOVE the parameter.
                 }
             }
         )
