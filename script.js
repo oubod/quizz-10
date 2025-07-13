@@ -226,43 +226,8 @@ async function fetchAndDisplayLobbyPlayers(sessionId, hostId) {
 }
 async function createBattle() {
     playSound('click');
-
-    // ---- NEW CODE START ----
-    if (!questionsReady) {
-        showToast('Questions are still loading, please wait a moment.', true);
-        return;
-    }
-    // ---- NEW CODE END ----
-
-    showToast('Creating a new battle room...');
-
-    // 1. Get 5 random questions for the battle
-    const battleQuestions = [...masterQuestionList].sort(() => 0.5 - Math.random()).slice(0, 5);
-    if (battleQuestions.length < 5) {
-        showToast('Not enough questions for a battle!', true);
-        return;
-    }
-
-    // 2. Create the game session in the database
-    const { data: session, error } = await db.from('game_sessions')
-        .insert({
-            questions: battleQuestions.map(q => q.id), // Store the array of question IDs
-            host_id: playerData.id
-        })
-        .select()
-        .single();
-    
-    if (error) {
-        showToast('Error creating battle. Please try again.', true);
-        console.error(error);
-        return;
-    }
-
-    // 3. The host automatically joins their own session
-    await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
-
-    // 4. Navigate to the lobby and start listening for events
-    navigateToLobby(session.id);
+    showScreen('battle-settings-screen');
+    populateBattleYears();
 }
 
 // --- Replace the old startBattleRound function with this one ---
@@ -324,15 +289,38 @@ async function handleBattleAnswer(selectedChoice, correctAnswer) {
 
     // Update your own score in the database
     await db.from('session_participants')
-      .update({ score: currentScore, answers: { /* you could log the answer here */ } })
+      .update({ score: currentScore })
       .match({ session_id: currentSessionId, player_id: playerData.id });
 
     // Announce to everyone that you have answered and what your new score is
     await battleChannel.send({
         type: 'broadcast',
         event: 'player_answered',
-        payload: { playerId: playerData.id, newScore: currentScore }
+        payload: {
+            playerId: playerData.id,
+            newScore: currentScore
+        }
     });
+
+    // If the host answers, move to the next round
+    if (battleParticipants[playerData.id]?.isHost) {
+        // Use an RPC call to safely increment the question index and get the new value
+        const { data, error } = await db.rpc('increment_question_index', { session_id_arg: currentSessionId });
+
+        if (error) {
+            console.error("Could not increment question index:", error);
+            return;
+        }
+
+        // Check if the game is over
+        if (data.is_game_over) {
+            // Send a broadcast that the game has ended
+            await battleChannel.send({ type: 'broadcast', event: 'game_over' });
+        } else {
+            // Otherwise, tell everyone to start the next round
+            await battleChannel.send({ type: 'broadcast', event: 'next_round' });
+        }
+    }
 }
 
 function updateBattleScoreboard() {
@@ -347,6 +335,7 @@ function updateBattleScoreboard() {
         scoreboardEl.appendChild(scoreDiv);
     }
 }
+
 
 async function navigateToLobby(sessionId) {
     currentSessionId = sessionId;
@@ -398,6 +387,14 @@ async function navigateToLobby(sessionId) {
             // Everyone (including the host) will receive this and start the game
             startBattleRound();
         })
+        .on('broadcast', { event: 'next_round' }, () => {
+            // Everyone starts the next round
+            startBattleRound();
+        })
+        .on('broadcast', { event: 'game_over' }, () => {
+            // Everyone sees the final results
+            showBattleResults();
+        })
         .subscribe();
 
     // Initial fetch to show who is already in the lobby
@@ -408,20 +405,51 @@ function updateLobbyUI(hostId) {
     const playerListEl = document.getElementById('lobby-player-list');
     playerListEl.innerHTML = '';
     
-    Object.values(battleParticipants).forEach(player => {
+    Object.keys(battleParticipants).forEach(id => {
+        const player = battleParticipants[id];
+        player.isHost = (id === hostId); // Set a flag on the participant object
         const li = document.createElement('li');
-        li.textContent = `✅ ${player.username}`;
+        li.textContent = `✅ ${player.username} ${player.isHost ? '(Host)' : ''}`;
         playerListEl.appendChild(li);
     });
 
-    // ---- THIS IS THE KEY CHANGE ----
-    // Check if the current player's ID matches the fetched hostId
-    if (playerData.id === hostId) { 
+    // Check if the current player is the host
+    if (battleParticipants[playerData.id]?.isHost) {
         document.getElementById('host-controls').classList.remove('hidden');
         document.getElementById('guest-message').classList.add('hidden');
     } else {
         document.getElementById('host-controls').classList.add('hidden');
         document.getElementById('guest-message').classList.remove('hidden');
+    }
+}
+
+async function showBattleResults() {
+    // Fetch final scores
+    const { data, error } = await db.from('session_participants')
+        .select('score, profiles(username)')
+        .eq('session_id', currentSessionId)
+        .order('score', { ascending: false });
+
+    if (error) {
+        showToast('Error fetching final results.', true);
+        return;
+    }
+
+    const resultsEl = document.getElementById('battle-final-results');
+    resultsEl.innerHTML = '';
+    data.forEach((p, index) => {
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'p-4 rounded-lg bg-slate-700';
+        resultDiv.innerHTML = `<h3 class="text-xl font-bold">${index + 1}. ${p.profiles.username}</h3><p>Score: ${p.score}</p>`;
+        resultsEl.appendChild(resultDiv);
+    });
+
+    showScreen('battle-end-screen');
+
+    // Clean up the battle channel
+    if (battleChannel) {
+        db.removeChannel(battleChannel);
+        battleChannel = null;
     }
 }
 
@@ -937,6 +965,85 @@ if (createBattleBtn) {
 // Initialize non-user-specific parts of the app
 initializeApp();
 
+const battleYearSelect = document.getElementById('battle-year-select');
+const battleModuleSelect = document.getElementById('battle-module-select');
+const battleTopicSelect = document.getElementById('battle-topic-select');
+const confirmBattleSettingsBtn = document.getElementById('confirm-battle-settings-btn');
+
+function populateBattleYears() {
+    battleYearSelect.innerHTML = '<option value="">Select Year...</option>';
+    Object.keys(quizStructure).forEach(year => battleYearSelect.add(new Option(year, year)));
+    populateBattleModules('');
+}
+
+function populateBattleModules(selectedYear) {
+    battleModuleSelect.innerHTML = '<option value="">Select Module...</option>';
+    battleModuleSelect.disabled = true;
+    if (selectedYear && quizStructure[selectedYear]) {
+        Object.keys(quizStructure[selectedYear]).forEach(module => battleModuleSelect.add(new Option(module, module)));
+        battleModuleSelect.disabled = false;
+    }
+    populateBattleTopics('', '');
+}
+
+function populateBattleTopics(selectedYear, selectedModule) {
+    battleTopicSelect.innerHTML = '<option value="">Select Topic...</option>';
+    battleTopicSelect.disabled = true;
+    confirmBattleSettingsBtn.disabled = true;
+    if (selectedYear && selectedModule && quizStructure[selectedYear][selectedModule]) {
+        Object.keys(quizStructure[selectedYear][selectedModule]).forEach(topic => battleTopicSelect.add(new Option(topic, topic)));
+        battleTopicSelect.disabled = false;
+    }
+}
+
+battleYearSelect.addEventListener('change', () => populateBattleModules(battleYearSelect.value));
+battleModuleSelect.addEventListener('change', () => populateBattleTopics(battleYearSelect.value, battleModuleSelect.value));
+battleTopicSelect.addEventListener('change', () => { confirmBattleSettingsBtn.disabled = !battleTopicSelect.value; });
+
+confirmBattleSettingsBtn.addEventListener('click', async () => {
+    const filePath = quizStructure[battleYearSelect.value]?.[battleModuleSelect.value]?.[battleTopicSelect.value];
+    if (!filePath) return;
+
+    const questionCount = document.getElementById('battle-question-count-select').value;
+    const timerMode = document.getElementById('battle-timer-mode-select').value;
+
+    try {
+        const response = await fetch(filePath);
+        let questionsForTopic = await response.json();
+        const battleQuestions = questionsForTopic.sort(() => 0.5 - Math.random()).slice(0, parseInt(questionCount, 10));
+
+        if (battleQuestions.length < parseInt(questionCount, 10)) {
+            showToast(`Not enough questions for this topic. Only ${battleQuestions.length} available.`, true);
+            return;
+        }
+
+        const { data: session, error } = await db.from('game_sessions')
+            .insert({
+                questions: battleQuestions.map(q => q.id),
+                host_id: playerData.id,
+                settings: {
+                    question_count: questionCount,
+                    timer_mode: timerMode,
+                    topic: battleTopicSelect.value
+                }
+            })
+            .select()
+            .single();
+
+        if (error) {
+            showToast('Error creating battle. Please try again.', true);
+            console.error(error);
+            return;
+        }
+
+        await db.from('session_participants').insert({ session_id: session.id, player_id: playerData.id });
+        navigateToLobby(session.id);
+
+    } catch (e) {
+        alert('Could not load this topic.');
+    }
+});
+
 // Add this function to handle the start battle button click
 async function startBattle() {
     playSound('click');
@@ -953,8 +1060,6 @@ async function startBattle() {
         payload: { message: 'The game is starting!' }
     });
 
-    // The host also calls the function directly
-    startBattleRound();
 }
 
 // Add this event listener with proper error checking
@@ -962,3 +1067,31 @@ const startBattleBtn = document.getElementById('start-battle-btn');
 if (startBattleBtn) {
     startBattleBtn.addEventListener('click', startBattle);
 }
+
+const battleBackToHomeBtn = document.getElementById('battle-back-to-home-btn');
+if (battleBackToHomeBtn) {
+    battleBackToHomeBtn.addEventListener('click', () => showScreen('start-screen'));
+}
+
+// --- State Preservation ---
+function saveState() {
+    const state = {
+        currentScreen: appContent.querySelector('.screen:not(.hidden)')?.id,
+        // Add other relevant state variables here
+    };
+    sessionStorage.setItem('appState', JSON.stringify(state));
+}
+
+function restoreState() {
+    const savedState = sessionStorage.getItem('appState');
+    if (savedState) {
+        const state = JSON.parse(savedState);
+        if (state.currentScreen) {
+            showScreen(state.currentScreen);
+        }
+        // Restore other state variables here
+    }
+}
+
+window.addEventListener('beforeunload', saveState);
+window.addEventListener('DOMContentLoaded', restoreState);

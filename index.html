@@ -153,6 +153,42 @@
                 <p id="guest-message" class="mt-6 text-yellow-300 hidden">Waiting for the host to start the game...</p>
             </div>
 
+            <!-- Battle Settings Screen -->
+            <div id="battle-settings-screen" class="screen hidden text-center">
+                <h2 class="text-3xl font-black mb-4">Battle Settings</h2>
+                <div class="game-card p-6 space-y-5">
+                    <div class="w-full text-left">
+                        <label for="battle-year-select" class="text-sm font-bold text-slate-300 mb-1">Year</label>
+                        <select id="battle-year-select" class="game-select"></select>
+                    </div>
+                    <div class="w-full text-left">
+                        <label for="battle-module-select" class="text-sm font-bold text-slate-300 mb-1">Module</label>
+                        <select id="battle-module-select" disabled class="game-select"></select>
+                    </div>
+                    <div class="w-full text-left">
+                        <label for="battle-topic-select" class="text-sm font-bold text-slate-300 mb-1">Topic</label>
+                        <select id="battle-topic-select" disabled class="game-select"></select>
+                    </div>
+                    <div class="w-full text-left">
+                        <label for="battle-question-count-select" class="text-sm font-bold text-slate-300 mb-1">Questions</label>
+                        <select id="battle-question-count-select" class="game-select">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="15">15</option>
+                            <option value="20">20</option>
+                        </select>
+                    </div>
+                    <div class="w-full text-left">
+                        <label for="battle-timer-mode-select" class="text-sm font-bold text-slate-300 mb-1">Timer Mode</label>
+                        <select id="battle-timer-mode-select" class="game-select">
+                            <option value="timed" selected>With Timer</option>
+                            <option value="untimed">No Timer</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="confirm-battle-settings-btn" disabled class="game-btn game-btn-start mt-4">Confirm and Create Lobby</button>
+            </div>
+
             <!-- Battle Quiz Screen (The actual multiplayer game) -->
             <div id="battle-quiz-screen" class="screen hidden">
                 <!-- Live Scoreboard -->
@@ -167,6 +203,15 @@
                         <p class="text-2xl font-bold text-white">Waiting for next round...</p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Battle End Screen -->
+            <div id="battle-end-screen" class="screen hidden text-center">
+                <h2 class="text-5xl font-black mb-4">Battle Over!</h2>
+                <div id="battle-final-results" class="space-y-4">
+                    <!-- Final results will be injected here -->
+                </div>
+                <button id="battle-back-to-home-btn" class="game-btn game-btn-start mt-8">Back to Home</button>
             </div>
             <div id="quiz-screen" class="screen hidden">
                  <div class="flex justify-between items-center mb-4 gap-4">
