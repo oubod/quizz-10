@@ -175,6 +175,7 @@ const motivationalQuotes = [
 ];
 
 // --- State Variables ---
+
 let quizStructure = {};
 let masterQuestionList = [];
 let bookmarkedQuestions = [];
@@ -186,10 +187,21 @@ let timer;
 let timeLeft = 20;
 let isTimerMode = true;
 
+// Track if questions are ready (loading state)
+let questionsReady = false;
+
 
 // --- Battle Functions ---
 async function createBattle() {
     playSound('click');
+
+    // ---- NEW CODE START ----
+    if (!questionsReady) {
+        showToast('Questions are still loading, please wait a moment.', true);
+        return;
+    }
+    // ---- NEW CODE END ----
+
     showToast('Creating a new battle room...');
 
     // 1. Get 5 random questions for the battle
@@ -578,6 +590,7 @@ async function preloadAllQuestions() {
     });
     
     console.log(`Preloaded ${masterQuestionList.length} questions in total.`);
+    questionsReady = true; // Set the flag
 }
 
 function populateYears() {
