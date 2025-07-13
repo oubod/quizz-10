@@ -394,23 +394,10 @@ async function navigateToLobby(sessionId) {
             // When a new participant is inserted, refetch the list.
             () => fetchAndDisplayLobbyPlayers(sessionId, sessionData.host_id)
         )
-        // ALSO listen for UPDATES to game_sessions (when the game starts)
-        .on(
-            'postgres_changes',
-            {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'game_sessions',
-                filter: `id=eq.${sessionId}`
-            },
-            (payload) => {
-                // Check if the 'status' column was the one that changed to 'active'
-                if (payload.new.status === 'active' && payload.old.status === 'waiting') {
-                    console.log('Game status changed to active!');
-                    startBattleRound(); // <-- REMOVE the parameter.
-                }
-            }
-        )
+        .on('broadcast', { event: 'start_game' }, () => {
+            // Everyone (including the host) will receive this and start the game
+            startBattleRound();
+        })
         .subscribe();
 
     // Initial fetch to show who is already in the lobby
@@ -954,23 +941,20 @@ initializeApp();
 async function startBattle() {
     playSound('click');
     
-    if (!currentSessionId) {
+    if (!currentSessionId || !battleChannel) {
         showToast('Error: No active battle session.', true);
         return;
     }
     
-    // Update the session status to 'active' in the database
-    const { error } = await db.from('game_sessions')
-        .update({ status: 'active' })
-        .eq('id', currentSessionId);
+    // The host sends a message to start the countdown
+    await battleChannel.send({
+        type: 'broadcast',
+        event: 'start_game',
+        payload: { message: 'The game is starting!' }
+    });
 
-    if (error) {
-        showToast('Error starting battle. Please try again.', true);
-        console.error(error);
-        return;
-    }
-    
-    showToast('Battle started! Good luck!');
+    // The host also calls the function directly
+    startBattleRound();
 }
 
 // Add this event listener with proper error checking
