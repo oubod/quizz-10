@@ -158,7 +158,8 @@ let playerData = {}; // This will now be populated from Supabase
 const themes = {
     'theme-dark-blue': { name: 'Deep Blue', color: '#3A41C9' },
     'theme-forest': { name: 'Forest', color: '#166534' },
-    'theme-rose-gold': { name: 'Rose Gold', color: '#fdf2f8' }
+    'theme-rose-gold': { name: 'Rose Gold', color: '#fdf2f8' },
+    'theme-ekg': { name: 'EKG', color: '#0c1b33' }
 };
 const achievementsList = { // This is now a reference/default structure
     firstQuiz: { name: "First Step", unlocked: false },
